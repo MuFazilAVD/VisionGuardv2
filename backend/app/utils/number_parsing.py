@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -7,6 +8,8 @@ import pandas as pd
 
 
 NON_NUMERIC_MARKERS = {"", "nan", "none", "null", "na", "n/a"}
+
+logger = logging.getLogger(__name__)
 
 
 def parse_numeric_value(value: Any) -> Any:
@@ -34,10 +37,13 @@ def parse_numeric_value(value: Any) -> Any:
 
 
 def clean_numeric_series(value: Any, *, index: pd.Index | None = None, default: float = 0.0) -> pd.Series:
+    logger.info("Cleaning numeric series with default=%s", default)
     if isinstance(value, pd.Series):
         series = value
     else:
         series = pd.Series(value, index=index)
 
     parsed = series.map(parse_numeric_value)
-    return pd.to_numeric(parsed, errors="coerce").fillna(default)
+    cleaned = pd.to_numeric(parsed, errors="coerce").fillna(default)
+    logger.info("Numeric series cleaned with %d value(s)", len(cleaned))
+    return cleaned

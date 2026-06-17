@@ -98,9 +98,27 @@ export type ClaimAssessment = {
   details: Record<string, unknown>;
 };
 
+export type BatchSummary = {
+  total_claims: number;
+  fraud_count: number;
+  suspicious_count: number;
+  clean_count: number;
+  high_risk_count: number;
+  medium_risk_count: number;
+  low_risk_count: number;
+  review_count: number;
+  average_risk_score: number;
+  summary: string;
+  metadata: {
+    model_used: string;
+    llm_success: boolean;
+    fallback_reason: string | null;
+  };
+};
+
 export type AnalyzeResponse = {
   processed_at: string;
   count: number;
+  batch_summary: BatchSummary;
   assessments: ClaimAssessment[];
 };
-

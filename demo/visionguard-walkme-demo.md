@@ -1,10 +1,10 @@
-# VisionGuard WalkMe Demo
+# visionguardv2 WalkMe Demo
 
-This demo script walks through the current VisionGuard web page from both a business and technical perspective. It is based on the actual React/FastAPI implementation and on a browser-equivalent run of the seeded sample claims.
+This demo script walks through the current visionguardv2 web page from both a business and technical perspective. It is based on the actual React/FastAPI implementation and on a browser-equivalent run of the seeded sample claims.
 
 ## Demo Context
 
-VisionGuard is a claims risk assessment proof of concept. The visible user experience is intentionally focused on business review language: claims, risk indicators, confidence, investigation findings, review patterns, and recommended actions.
+visionguardv2 is a claims risk assessment proof of concept. The visible user experience is intentionally focused on business review language: claims, risk indicators, confidence, investigation findings, review patterns, and recommended actions.
 
 Technically, the application is a Vite React frontend backed by a FastAPI service. The frontend renders a single analyst workspace. The backend owns sample data, training, rule evaluation, model scoring, anomaly scoring, historical similarity checks, and narrative generation.
 
@@ -23,7 +23,7 @@ The frontend build was verified with `npm run build`.
 
 ## Opening The Web Page
 
-When you open the VisionGuard page, the first impression is a compact analyst workspace rather than a marketing or dashboard landing page. The screen is built for someone who wants to load claim rows, inspect the claim fields, run assessment, and immediately read the returned results.
+When you open the visionguardv2 page, the first impression is a compact analyst workspace rather than a marketing or dashboard landing page. The screen is built for someone who wants to load claim rows, inspect the claim fields, run assessment, and immediately read the returned results.
 
 The page background is a pale blue-gray canvas. Technically this comes from the CSS variable and Tailwind token `canvas`, set to `#edf2f7`. The body also has two faint grid gradients: one vertical and one horizontal, each spaced every 28 pixels. Business-wise, this gives the page a controlled workbench feeling without distracting from claims data.
 
@@ -45,10 +45,10 @@ On the left is a square icon tile. The tile is 40 by 40 pixels because it uses t
 
 Next to the icon are two text elements:
 
-- `VisionGuard`
+- `visionguardv2`
 - `Claims Risk Assessment`
 
-`VisionGuard` is small, blue, and semibold. It is the product label. `Claims Risk Assessment` is the main page title, rendered as an `h1`. It can truncate if the viewport is narrow, because it uses `truncate`.
+`visionguardv2` is small, blue, and semibold. It is the product label. `Claims Risk Assessment` is the main page title, rendered as an `h1`. It can truncate if the viewport is narrow, because it uses `truncate`.
 
 ## Page Body
 
@@ -77,7 +77,7 @@ That line is dynamic. It comes from the React state variable `sourceLabel` and t
 On first page load, `App.tsx` calls `getSampleData()`, which calls:
 
 ```text
-GET /visionguard/api/sample-data
+GET /visionguardv2/api/sample-data
 ```
 
 The backend `SampleDataService` returns summaries for:
@@ -121,7 +121,7 @@ Technical behavior:
 5. `retrainAssessmentEngine()` sends:
 
 ```text
-POST /visionguard/api/training/retrain
+POST /visionguardv2/api/training/retrain
 ```
 
 The backend training flow:
@@ -246,7 +246,7 @@ Add at least one claim for assessment.
 5. The API client sends:
 
 ```text
-POST /visionguard/api/claims/analyze
+POST /visionguardv2/api/claims/analyze
 ```
 
 with JSON:
@@ -488,7 +488,7 @@ Technical reading: `99213` triggers `R009` because it does not start with `92` o
 When we click `Proceed`, the frontend sends the current claims to:
 
 ```text
-POST /visionguard/api/claims/analyze
+POST /visionguardv2/api/claims/analyze
 ```
 
 The backend does the following:
@@ -695,7 +695,7 @@ The UI rounds `0.192486 * 100` to `19%`.
 
 ### RT001 Business Explanation
 
-This claim is low risk overall, but it has one billing concern. The procedure code `99213` is an office visit code. VisionGuard's realtime rule expects vision-plan code families to start with `92` or `V`. Since `99213` does not start with either, the claim triggers:
+This claim is low risk overall, but it has one billing concern. The procedure code `99213` is an office visit code. visionguardv2's realtime rule expects vision-plan code families to start with `92` or `V`. Since `99213` does not start with either, the claim triggers:
 
 ```text
 R009 Invalid CPT for vision plan
@@ -1199,7 +1199,7 @@ Technical note: these values are available in `assessment.details` if a future r
 
 ## End Of Demo Summary
 
-At the end of the demo, the audience should understand that VisionGuard provides a single-page claims assessment workflow:
+At the end of the demo, the audience should understand that visionguardv2 provides a single-page claims assessment workflow:
 
 1. Load sample or uploaded claims.
 2. Edit every claim field inline.

@@ -1,5 +1,7 @@
 import {
   ArrowsClockwise,
+  CaretDown,
+  CaretUp,
   CheckCircle,
   ClipboardText,
   Fingerprint,
@@ -24,6 +26,7 @@ import { Table, TBody, TD, TH, THead, TR } from "../components/ui/table";
 import { analyzeClaims } from "../services/api";
 import type {
   AnalyzeResponse,
+  BatchSummary,
   ClaimRecord,
   SampleDataResponse,
   TrainingResponse
@@ -334,6 +337,24 @@ export default function ClaimWorkspace({
 }
 
 function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
+  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    setCollapsedCards(new Set());
+  }, [analysis]);
+
+  const toggleCard = (cardKey: string) => {
+    setCollapsedCards((current) => {
+      const next = new Set(current);
+      if (next.has(cardKey)) {
+        next.delete(cardKey);
+      } else {
+        next.add(cardKey);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-4">
       <section className="rounded-lg border border-slate-950/20 bg-[#10151f] p-4 text-white shadow-panel">
@@ -345,111 +366,206 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
         </p>
       </section>
 
+      <BatchSummaryBox summary={analysis.batch_summary} />
+
       <div className="space-y-4">
-        {analysis.assessments.map((assessment) => (
-          <Card key={`${assessment.claim_id}-${assessment.line_number}`} className={`border-t-4 ${riskBorder(assessment.risk_level)}`}>
-            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle>
-                  Claim {assessment.claim_id} - Line {assessment.line_number}
-                </CardTitle>
-                <p className="mt-1 text-sm text-muted">
-                  {assessment.procedure_code} {assessment.procedure_name}
-                </p>
-              </div>
-              <RiskBadge level={assessment.risk_level} />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2 md:grid-cols-4">
-                <SummaryStat
-                  label="Risk Score"
-                  value={`${Math.round(assessment.final_risk_score * 100)}%`}
-                  icon={<Gauge size={19} weight="duotone" />}
-                  tone={assessment.risk_level === "High" ? "danger" : assessment.risk_level === "Medium" ? "warning" : "success"}
-                />
-                <SummaryStat
-                  label="Confidence Level"
-                  value={`${Math.round(assessment.confidence_level * 100)}%`}
-                  icon={<SealCheck size={19} weight="duotone" />}
-                  tone="info"
-                />
-                <SummaryStat
-                  label="Risk Indicators"
-                  value={assessment.rule_flag_count.toString()}
-                  icon={<ShieldWarning size={19} weight="duotone" />}
-                  tone={assessment.rule_flag_count > 0 ? "warning" : "success"}
-                />
-                <SummaryStat
-                  label="Review Pattern"
-                  value={assessment.predicted_pattern}
-                  icon={<Fingerprint size={19} weight="duotone" />}
-                  tone="accent"
-                />
-              </div>
+        {analysis.assessments.map((assessment, index) => {
+          const cardKey = `${assessment.claim_id}-${assessment.line_number}-${index}`;
+          const contentId = `assessment-details-${index}`;
+          const isCollapsed = collapsedCards.has(cardKey);
 
-              <section className="rounded-lg border border-sky-200 bg-sky-50/80 p-4">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <ClipboardText size={17} weight="duotone" aria-hidden="true" />
-                  Executive Summary
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-ink">{assessment.narrative.executive_summary}</p>
-              </section>
+          return (
+            <Card key={cardKey} className={`border-t-4 ${riskBorder(assessment.risk_level)}`}>
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>
+                    Claim {assessment.claim_id} - Line {assessment.line_number}
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-muted">
+                    {assessment.procedure_code} {assessment.procedure_name}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <RiskBadge level={assessment.risk_level} />
+                  <Button
+                    variant="secondary"
+                    aria-controls={contentId}
+                    aria-expanded={!isCollapsed}
+                    className="min-h-8 px-3 py-1.5"
+                    icon={isCollapsed ? <CaretDown size={16} weight="bold" /> : <CaretUp size={16} weight="bold" />}
+                    onClick={() => toggleCard(cardKey)}
+                  >
+                    {isCollapsed ? "Expand" : "Collapse"}
+                  </Button>
+                </div>
+              </CardHeader>
+              {!isCollapsed ? (
+                <CardContent id={contentId} className="space-y-4">
+                  <div className="grid gap-2 md:grid-cols-4">
+                    <SummaryStat
+                      label="Risk Score"
+                      value={`${Math.round(assessment.final_risk_score * 100)}%`}
+                      icon={<Gauge size={19} weight="duotone" />}
+                      tone={assessment.risk_level === "High" ? "danger" : assessment.risk_level === "Medium" ? "warning" : "success"}
+                    />
+                    <SummaryStat
+                      label="Confidence Level"
+                      value={`${Math.round(assessment.confidence_level * 100)}%`}
+                      icon={<SealCheck size={19} weight="duotone" />}
+                      tone="info"
+                    />
+                    <SummaryStat
+                      label="Risk Indicators"
+                      value={assessment.rule_flag_count.toString()}
+                      icon={<ShieldWarning size={19} weight="duotone" />}
+                      tone={assessment.rule_flag_count > 0 ? "warning" : "success"}
+                    />
+                    <SummaryStat
+                      label="Review Pattern"
+                      value={assessment.predicted_pattern}
+                      icon={<Fingerprint size={19} weight="duotone" />}
+                      tone="accent"
+                    />
+                  </div>
 
-              <div className="grid gap-3 lg:grid-cols-3">
-                <ResultList title="Investigation Findings" items={assessment.narrative.investigation_findings} />
-                <ResultList title="Key Risk Indicators" items={assessment.narrative.key_risk_indicators} />
-                <ResultList title="Review Recommendations" items={assessment.narrative.recommended_review_actions} />
-              </div>
+                  <section className="rounded-lg border border-sky-200 bg-sky-50/80 p-4">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                      <ClipboardText size={17} weight="duotone" aria-hidden="true" />
+                      Executive Summary
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-ink">{assessment.narrative.executive_summary}</p>
+                  </section>
 
-              <section className="overflow-x-auto">
-                <Table className="min-w-[720px]">
-                  <THead>
-                    <TR>
-                      <TH>Indicator</TH>
-                      <TH>Severity</TH>
-                      <TH>Category</TH>
-                      <TH>Description</TH>
-                    </TR>
-                  </THead>
-                  <TBody>
-                    {assessment.triggered_indicators.length ? (
-                      assessment.triggered_indicators.map((indicator) => (
-                        <TR key={indicator.rule_id}>
-                          <TD className="font-medium text-ink">{indicator.name}</TD>
-                          <TD>
-                            <RiskBadge level={indicator.severity} />
-                          </TD>
-                          <TD>{indicator.category}</TD>
-                          <TD className="text-muted">{indicator.description}</TD>
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <ResultList title="Investigation Findings" items={assessment.narrative.investigation_findings} />
+                    <ResultList title="Key Risk Indicators" items={assessment.narrative.key_risk_indicators} />
+                    <ResultList title="Review Recommendations" items={assessment.narrative.recommended_review_actions} />
+                  </div>
+
+                  <section className="overflow-x-auto">
+                    <Table className="min-w-[720px]">
+                      <THead>
+                        <TR>
+                          <TH>Indicator</TH>
+                          <TH>Severity</TH>
+                          <TH>Category</TH>
+                          <TH>Description</TH>
                         </TR>
-                      ))
-                    ) : (
-                      <TR>
-                        <TD colSpan={4} className="text-muted">
-                          No rule-based indicators were triggered.
-                        </TD>
-                      </TR>
-                    )}
-                  </TBody>
-                </Table>
-              </section>
+                      </THead>
+                      <TBody>
+                        {assessment.triggered_indicators.length ? (
+                          assessment.triggered_indicators.map((indicator) => (
+                            <TR key={indicator.rule_id}>
+                              <TD className="font-medium text-ink">{indicator.name}</TD>
+                              <TD>
+                                <RiskBadge level={indicator.severity} />
+                              </TD>
+                              <TD>{indicator.category}</TD>
+                              <TD className="text-muted">{indicator.description}</TD>
+                            </TR>
+                          ))
+                        ) : (
+                          <TR>
+                            <TD colSpan={4} className="text-muted">
+                              No rule-based indicators were triggered.
+                            </TD>
+                          </TR>
+                        )}
+                      </TBody>
+                    </Table>
+                  </section>
 
-              <section className="rounded-lg border border-line bg-slate-50/80 p-4">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <Target size={17} weight="duotone" aria-hidden="true" />
-                  Detailed Claim Assessment
-                </h3>
-                <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <Detail label="Provider" value={assessment.provider_npi} />
-                  <Detail label="Category" value={assessment.category} />
-                  <Detail label="Top Reason" value={assessment.top_reason} />
-                  <Detail label="Recommended Action" value={assessment.recommended_action} />
-                </dl>
-              </section>
-            </CardContent>
-          </Card>
-        ))}
+                  <section className="rounded-lg border border-line bg-slate-50/80 p-4">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                      <Target size={17} weight="duotone" aria-hidden="true" />
+                      Detailed Claim Assessment
+                    </h3>
+                    <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <Detail label="Provider" value={assessment.provider_npi} />
+                      <Detail label="Category" value={assessment.category} />
+                      <Detail label="Top Reason" value={assessment.top_reason} />
+                      <Detail label="Recommended Action" value={assessment.recommended_action} />
+                    </dl>
+                  </section>
+                </CardContent>
+              ) : null}
+            </Card>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+function BatchSummaryBox({ summary }: { summary: BatchSummary }) {
+  return (
+    <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <ClipboardText size={17} weight="duotone" aria-hidden="true" />
+            Batch Overview
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">{summary.summary}</p>
+        </div>
+        <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[520px]">
+          <BatchCount
+            label="Frauds"
+            value={summary.fraud_count}
+            icon={<ShieldWarning size={16} weight="duotone" />}
+            tone="danger"
+          />
+          <BatchCount
+            label="Suspicious"
+            value={summary.suspicious_count}
+            icon={<WarningCircle size={16} weight="duotone" />}
+            tone="warning"
+          />
+          <BatchCount
+            label="Clean"
+            value={summary.clean_count}
+            icon={<CheckCircle size={16} weight="duotone" />}
+            tone="success"
+          />
+          <BatchCount
+            label="Avg Risk"
+            value={`${Math.round(summary.average_risk_score * 100)}%`}
+            icon={<Gauge size={16} weight="duotone" />}
+            tone="info"
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BatchCount({
+  label,
+  value,
+  icon,
+  tone
+}: {
+  label: string;
+  value: number | string;
+  icon: ReactNode;
+  tone: "success" | "warning" | "danger" | "info";
+}) {
+  const toneStyles = {
+    success: "border-green-200 bg-green-50 text-success",
+    warning: "border-amber-200 bg-amber-50 text-warning",
+    danger: "border-red-200 bg-red-50 text-danger",
+    info: "border-sky-200 bg-sky-50 text-info"
+  };
+
+  return (
+    <div className="min-h-20 rounded-lg border border-line bg-slate-50/80 p-3">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted">
+        <span className={`flex size-7 shrink-0 items-center justify-center rounded-lg border ${toneStyles[tone]}`} aria-hidden="true">
+          {icon}
+        </span>
+        <span className="truncate">{label}</span>
+      </div>
+      <p className="mt-2 text-2xl font-semibold text-ink">{value}</p>
     </div>
   );
 }

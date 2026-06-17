@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -38,6 +39,8 @@ NUMERIC_FIELDS = [
     "AmtCoinsurance",
     "AmtDeductible",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 class ClaimInput(BaseModel):
@@ -94,14 +97,18 @@ class AnalyzeRequest(BaseModel):
 
 
 def validate_claim_payload(payload: Any) -> list[dict[str, Any]]:
+    logger.info("Validating claim payload")
     if isinstance(payload, list):
         raw_claims = payload
     elif isinstance(payload, dict) and isinstance(payload.get("claims"), list):
         raw_claims = payload["claims"]
     else:
+        logger.info("Claim payload validation failed: unsupported payload shape")
         raise ValueError("Request body must be a claim list or an object with a claims list.")
 
     claims = [ClaimInput.model_validate(item).model_dump() for item in raw_claims]
     if not claims:
+        logger.info("Claim payload validation failed: no claims submitted")
         raise ValueError("Submit at least one claim for realtime assessment.")
+    logger.info("Validated %d claim payload item(s)", len(claims))
     return claims

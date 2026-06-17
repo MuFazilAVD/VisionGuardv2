@@ -22,7 +22,7 @@ python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## Endpoints
 
-### `POST /visionguard/api/training/retrain`
+### `POST /visionguardv2/api/training/retrain`
 
 Runs the complete training pipeline:
 
@@ -51,7 +51,7 @@ Example response:
 }
 ```
 
-### `GET /visionguard/api/training/status`
+### `GET /visionguardv2/api/training/status`
 
 Returns current training status.
 
@@ -88,7 +88,7 @@ Example response after training:
 }
 ```
 
-### `POST /visionguard/api/claims/analyze`
+### `POST /visionguardv2/api/claims/analyze`
 
 Accepts either:
 
@@ -174,7 +174,7 @@ Example response:
 }
 ```
 
-### `GET /visionguard/api/sample-data`
+### `GET /visionguardv2/api/sample-data`
 
 Ensures generated datasets exist and returns summary information.
 

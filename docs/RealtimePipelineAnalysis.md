@@ -20,7 +20,7 @@ Notebook behavior:
 
 Modern replacement:
 
-- Accept CSV upload or JSON payload through `POST /visionguard/api/claims/analyze`.
+- Accept CSV upload or JSON payload through `POST /visionguardv2/api/claims/analyze`.
 - Accept one or more claims in a request.
 - Use the same canonical schema as `realtime_claims.csv`.
 

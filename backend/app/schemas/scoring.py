@@ -46,8 +46,22 @@ class ClaimAssessment(BaseModel):
     details: dict[str, Any]
 
 
+class BatchSummary(BaseModel):
+    total_claims: int
+    fraud_count: int
+    suspicious_count: int
+    clean_count: int
+    high_risk_count: int
+    medium_risk_count: int
+    low_risk_count: int
+    review_count: int
+    average_risk_score: float
+    summary: str
+    metadata: NarrativeMetadata
+
+
 class AnalyzeResponse(BaseModel):
     processed_at: str
     count: int
+    batch_summary: BatchSummary
     assessments: list[ClaimAssessment]
-

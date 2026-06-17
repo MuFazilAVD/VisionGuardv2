@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from random import Random
 from typing import Any
 
@@ -60,27 +61,40 @@ LOBS = ["COMM", "MEDICARE", "MEDICAID"]
 COVERAGE_CODES = ["PPO", "HMO", "EPO", "VSP"]
 GENDERS = ["F", "M", "U"]
 
+logger = logging.getLogger(__name__)
+
 
 class SampleDataService:
     def __init__(self) -> None:
+        logger.info("Initializing sample data service")
         self.data_repository = DataRepository()
 
     def ensure_sample_data(self, record_count: int = 8000) -> dict[str, Any]:
+        logger.info("Ensuring sample data exists with target historical record count=%d", record_count)
         ensure_directories()
         if not HISTORICAL_CLAIMS_PATH.exists():
+            logger.info("Historical sample claims missing; generating %d row(s)", record_count)
             self.generate_historical_claims(record_count)
+        else:
+            logger.info("Historical sample claims already exist at %s", HISTORICAL_CLAIMS_PATH)
         if not RULES_XLSX_PATH.exists():
+            logger.info("Rules workbook missing; generating workbook")
             self.generate_rules_workbook()
+        else:
+            logger.info("Rules workbook already exists at %s", RULES_XLSX_PATH)
         return self.summary()
 
     def generate_rules_workbook(self) -> None:
+        logger.info("Generating rules workbook at %s", RULES_XLSX_PATH)
         rules_df = pd.DataFrame(rule_definitions_for_workbook())
         executable_rules_df = pd.DataFrame(executable_rule_definitions_for_workbook())
         with pd.ExcelWriter(RULES_XLSX_PATH, engine="openpyxl") as writer:
             rules_df.to_excel(writer, index=False, sheet_name="Business Rules")
             executable_rules_df.to_excel(writer, index=False, sheet_name="Executable Rules")
+        logger.info("Rules workbook generated with %d catalog row(s)", len(rules_df))
 
     def generate_historical_claims(self, record_count: int = 8000) -> None:
+        logger.info("Generating %d historical sample claim row(s)", record_count)
         rng = np.random.default_rng(42)
         py_rng = Random(42)
         rows: list[dict[str, Any]] = []
@@ -100,6 +114,7 @@ class SampleDataService:
         df = pd.DataFrame(rows)
         df = df[CANONICAL_CLAIM_COLUMNS + ["Flag"]]
         df.to_csv(HISTORICAL_CLAIMS_PATH, index=False)
+        logger.info("Historical sample claims written to %s", HISTORICAL_CLAIMS_PATH)
 
     def _base_row(
         self,
@@ -192,6 +207,7 @@ class SampleDataService:
         rng: np.random.Generator,
         py_rng: Random,
     ) -> None:
+        logger.info("Injecting deterministic rule coverage into sample data")
         for i in range(0, 120):
             rows[i].update({"ProcedureCode": "92014", "ProcedureName": "Comprehensive Eye Exam", "Modifier": "59"})
 
@@ -227,18 +243,28 @@ class SampleDataService:
         for i in range(1300, 1550):
             code, name = py_rng.choice([item for item in MATERIAL_CODES if item[0] in {"V2750", "V2755", "V2760"}])
             rows[i].update({"ProviderNPI": providers["addon"], "ProcedureCode": code, "ProcedureName": name})
+        logger.info("Rule coverage injection complete")
 
     def summary(self) -> dict[str, Any]:
+        logger.info("Building sample data summary")
         historical = self.data_repository.load_historical_claims() if HISTORICAL_CLAIMS_PATH.exists() else pd.DataFrame()
         rules = self.data_repository.load_rules() if RULES_XLSX_PATH.exists() else pd.DataFrame()
         realtime = self.data_repository.load_realtime_sample_claims() if ROOT_REALTIME_CLAIMS.exists() else pd.DataFrame()
-        return {
+        result = {
             "historical_claims": self._dataset_summary(HISTORICAL_CLAIMS_PATH, historical),
             "rules": self._dataset_summary(RULES_XLSX_PATH, rules),
             "realtime_claims": self._dataset_summary(ROOT_REALTIME_CLAIMS, realtime),
         }
+        logger.info(
+            "Sample data summary built: historical=%d rules=%d realtime=%d",
+            result["historical_claims"]["record_count"],
+            result["rules"]["record_count"],
+            result["realtime_claims"]["record_count"],
+        )
+        return result
 
     def _dataset_summary(self, path, df: pd.DataFrame) -> dict[str, Any]:
+        logger.info("Summarizing dataset %s with %d row(s)", path, len(df))
         preview = df.head(5).replace({np.nan: None}).to_dict(orient="records") if not df.empty else []
         return {
             "path": str(path),

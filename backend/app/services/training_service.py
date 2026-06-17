@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 from typing import Any
 
 import pandas as pd
@@ -18,27 +19,39 @@ from app.repositories.data_repository import DataRepository
 from app.services.sample_data_service import SampleDataService
 from app.utils.paths import METADATA_PATH, TRAINING_METRICS_PATH
 
+logger = logging.getLogger(__name__)
+
 
 class TrainingService:
     def __init__(self) -> None:
+        logger.info("Initializing training service")
         self.sample_data_service = SampleDataService()
         self.data_repository = DataRepository()
         self.artifact_repository = ArtifactRepository()
 
     def retrain(self) -> dict[str, Any]:
+        logger.info("Starting training run")
         self.sample_data_service.ensure_sample_data()
         historical = self.data_repository.load_historical_claims()
+        logger.info("Loaded %d historical claim row(s) for training", len(historical))
         self.data_repository.load_rules()
         historical_fingerprint = self.data_repository.historical_fingerprint()
+        logger.info(
+            "Historical dataset fingerprint loaded: sha256=%s",
+            historical_fingerprint["sha256"] if historical_fingerprint else "<missing>",
+        )
 
         rules_df = apply_rules(historical, mode="historical")
+        logger.info("Historical rules applied; total triggered flags=%d", int(rules_df["Rule_Flag_Count"].sum()))
         labeled = rules_df[rules_df["Flag"].fillna("").astype(str).str.strip() != ""].copy()
         labeled["Flag"] = labeled["Flag"].replace({"Two Exams in One day": "Two Exams in One Day"})
+        logger.info("Prepared labeled training set with %d row(s)", len(labeled))
         X = prepare_feature_frame(labeled)
         y_text = labeled["Flag"].astype(str)
 
         label_encoder = LabelEncoder()
         y = label_encoder.fit_transform(y_text)
+        logger.info("Encoded %d training label class(es)", len(label_encoder.classes_))
 
         stratify = y if min(pd.Series(y).value_counts()) >= 2 else None
         X_train, X_test, y_train, y_test = train_test_split(
@@ -48,10 +61,16 @@ class TrainingService:
             random_state=42,
             stratify=stratify,
         )
+        logger.info("Split training data: train=%d test=%d stratified=%s", len(X_train), len(X_test), stratify is not None)
 
         feature_pipeline = build_feature_pipeline()
         X_train_encoded = feature_pipeline.fit_transform(X_train)
         X_test_encoded = feature_pipeline.transform(X_test)
+        logger.info(
+            "Feature pipeline fitted: train_shape=%s test_shape=%s",
+            getattr(X_train_encoded, "shape", "<unknown>"),
+            getattr(X_test_encoded, "shape", "<unknown>"),
+        )
 
         model = RandomForestClassifier(
             n_estimators=100,
@@ -60,6 +79,7 @@ class TrainingService:
             n_jobs=-1,
             class_weight="balanced_subsample",
         )
+        logger.info("Training random forest classifier")
         model.fit(X_train_encoded, y_train)
 
         predictions = model.predict(X_test_encoded)
@@ -88,8 +108,14 @@ class TrainingService:
                 "training_metrics.json",
             ],
         }
+        logger.info(
+            "Training metrics computed: accuracy=%.6f f1_weighted=%.6f",
+            metrics["accuracy"],
+            metrics["f1_weighted"],
+        )
 
         anomaly_stats = compute_anomaly_stats(rules_df)
+        logger.info("Anomaly stats computed for %d feature(s)", len(anomaly_stats.get("features", [])))
         index_to_label = {str(index): label for index, label in enumerate(label_encoder.classes_)}
         metadata = {
             "artifact_version": artifact_version,
@@ -132,6 +158,7 @@ class TrainingService:
             anomaly_stats=anomaly_stats,
             metrics=metrics,
         )
+        logger.info("Training artifacts saved with version=%s", artifact_version)
 
         return {
             "status": "trained",
@@ -141,9 +168,11 @@ class TrainingService:
         }
 
     def status(self) -> dict[str, Any]:
+        logger.info("Checking training status")
         trained = self.artifact_repository.artifacts_exist()
         artifacts = self.artifact_repository.list_artifacts()
         if not trained:
+            logger.info("Training status: artifacts missing")
             return {
                 "trained": False,
                 "last_training_date": None,
@@ -154,27 +183,35 @@ class TrainingService:
 
         metadata = self.artifact_repository.load_json(METADATA_PATH)
         metrics = self.artifact_repository.load_json(TRAINING_METRICS_PATH)
+        current = self.artifacts_current()
+        logger.info("Training status: trained=True artifact_version=%s current=%s", metadata.get("artifact_version"), current)
         return {
             "trained": True,
             "last_training_date": metadata.get("trained_at"),
             "metrics": metrics,
             "artifact_version": metadata.get("artifact_version"),
             "artifacts": artifacts,
-            "artifacts_current": self.artifacts_current(),
+            "artifacts_current": current,
         }
 
     def artifacts_current(self) -> bool:
+        logger.info("Checking whether training artifacts are current")
         if not self.artifact_repository.artifacts_exist():
+            logger.info("Artifacts are not current: required artifact files are missing")
             return False
         self.sample_data_service.ensure_sample_data()
         current = self.data_repository.historical_fingerprint()
         if current is None:
+            logger.info("Artifacts are not current: historical dataset is missing")
             return False
 
         try:
             metadata = self.artifact_repository.load_json(METADATA_PATH)
         except Exception:
+            logger.exception("Artifacts are not current: metadata could not be loaded")
             return False
 
         saved = metadata.get("historical_dataset") or {}
-        return saved.get("sha256") == current.get("sha256")
+        is_current = saved.get("sha256") == current.get("sha256")
+        logger.info("Artifact freshness check completed: current=%s", is_current)
+        return is_current

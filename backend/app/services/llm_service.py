@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from openai import OpenAI
@@ -16,14 +17,19 @@ NARRATIVE_KEYS = [
     "recommended_review_actions",
 ]
 
+logger = logging.getLogger(__name__)
+
 
 class LLMNarrativeService:
     def generate_for_claim(self, claim_data: dict[str, Any]) -> dict[str, Any]:
+        logger.info("Generating narrative for claim_id=%s", claim_data.get("claim_id", "<missing>"))
         settings = get_settings()
         if not settings.openai_api_key or not settings.openai_model:
+            logger.info("LLM narrative using fallback because model configuration is incomplete")
             return self._fallback(claim_data, "OPENAI_API_KEY or OPENAI_MODEL is not configured")
 
         try:
+            logger.info("Calling LLM model %s for claim narrative", settings.openai_model)
             client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
             completion = client.chat.completions.create(
                 model=settings.openai_model,
@@ -52,11 +58,57 @@ class LLMNarrativeService:
                 "llm_success": True,
                 "fallback_reason": None,
             }
+            logger.info("LLM narrative generated successfully for claim_id=%s", claim_data.get("claim_id", "<missing>"))
             return narrative
         except Exception as exc:  # LLM failure must never block scoring.
+            logger.exception("LLM narrative generation failed; using fallback")
             return self._fallback(claim_data, str(exc))
 
+    def generate_for_batch(self, batch_data: dict[str, Any]) -> dict[str, Any]:
+        logger.info("Generating batch summary for %d claim(s)", int(batch_data.get("total_claims") or 0))
+        settings = get_settings()
+        if not settings.openai_api_key or not settings.openai_model:
+            logger.info("Batch summary using fallback because model configuration is incomplete")
+            return self._batch_fallback(batch_data, "OPENAI_API_KEY or OPENAI_MODEL is not configured")
+
+        try:
+            logger.info("Calling LLM model %s for batch summary", settings.openai_model)
+            client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
+            completion = client.chat.completions.create(
+                model=settings.openai_model,
+                temperature=0.2,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You write concise batch-level claims assessment summaries for business users. "
+                            "Use one short sentence, no more than 28 words. Avoid technical model terms. "
+                            "Return valid JSON only with key: summary."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(self._batch_business_context(batch_data), default=str),
+                    },
+                ],
+            )
+            text = completion.choices[0].message.content or "{}"
+            parsed = json.loads(text)
+            logger.info("LLM batch summary generated successfully")
+            return {
+                "summary": self._concise_text(str(parsed.get("summary") or "Batch assessment completed.")),
+                "metadata": {
+                    "model_used": settings.openai_model,
+                    "llm_success": True,
+                    "fallback_reason": None,
+                },
+            }
+        except Exception as exc:  # LLM failure must never block scoring.
+            logger.exception("LLM batch summary generation failed; using fallback")
+            return self._batch_fallback(batch_data, str(exc))
+
     def _coerce_narrative(self, value: dict[str, Any]) -> dict[str, Any]:
+        logger.info("Coercing LLM narrative response")
         result: dict[str, Any] = {}
         result["executive_summary"] = str(value.get("executive_summary") or "Claim assessment completed.")
         for key in ["investigation_findings", "key_risk_indicators", "recommended_review_actions"]:
@@ -68,6 +120,7 @@ class LLMNarrativeService:
         return result
 
     def _fallback(self, claim_data: dict[str, Any], reason: str) -> dict[str, Any]:
+        logger.info("Building deterministic narrative fallback: reason=%s", reason)
         risk_level = claim_data.get("risk_level", "Low")
         indicators = claim_data.get("triggered_indicators", [])
         indicator_names = [item.get("name", "Risk indicator") for item in indicators]
@@ -99,7 +152,44 @@ class LLMNarrativeService:
             },
         }
 
+    def _batch_fallback(self, batch_data: dict[str, Any], reason: str) -> dict[str, Any]:
+        logger.info("Building deterministic batch summary fallback: reason=%s", reason)
+        total = int(batch_data.get("total_claims") or 0)
+        fraud = int(batch_data.get("fraud_count") or 0)
+        suspicious = int(batch_data.get("suspicious_count") or 0)
+        clean = int(batch_data.get("clean_count") or 0)
+
+        if fraud:
+            summary = (
+                f"{total} claims processed: {fraud} fraud review case(s), "
+                f"{suspicious} suspicious, and {clean} clean."
+            )
+        elif suspicious:
+            summary = (
+                f"{total} claims processed with {suspicious} suspicious case(s) "
+                f"and {clean} clean; prioritize selective review."
+            )
+        else:
+            summary = f"{total} claims processed with no fraud review cases; {clean} clean case(s)."
+
+        return {
+            "summary": self._concise_text(summary),
+            "metadata": {
+                "model_used": "deterministic-fallback",
+                "llm_success": False,
+                "fallback_reason": reason,
+            },
+        }
+
+    def _concise_text(self, value: str, max_words: int = 32) -> str:
+        text = " ".join(value.strip().split())
+        words = text.split()
+        if len(words) <= max_words:
+            return text
+        return " ".join(words[:max_words]).rstrip(".,;:") + "."
+
     def _business_context(self, claim_data: dict[str, Any]) -> dict[str, Any]:
+        logger.info("Building business context for LLM narrative")
         return {
             "claim": {
                 "claim_id": claim_data.get("claim_id"),
@@ -125,4 +215,24 @@ class LLMNarrativeService:
                 "recommended_action": claim_data.get("recommended_action"),
                 "triggered_indicators": claim_data.get("triggered_indicators"),
             },
+        }
+
+    def _batch_business_context(self, batch_data: dict[str, Any]) -> dict[str, Any]:
+        logger.info("Building business context for LLM batch summary")
+        return {
+            "batch": {
+                "total_claims": batch_data.get("total_claims"),
+                "fraud_count": batch_data.get("fraud_count"),
+                "suspicious_count": batch_data.get("suspicious_count"),
+                "clean_count": batch_data.get("clean_count"),
+                "review_count": batch_data.get("review_count"),
+                "average_risk_score": batch_data.get("average_risk_score"),
+            },
+            "risk_mix": {
+                "high": batch_data.get("high_risk_count"),
+                "medium": batch_data.get("medium_risk_count"),
+                "low": batch_data.get("low_risk_count"),
+            },
+            "top_categories": batch_data.get("top_categories", []),
+            "top_reasons": batch_data.get("top_reasons", []),
         }

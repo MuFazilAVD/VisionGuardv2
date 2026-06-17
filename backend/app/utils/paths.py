@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 
@@ -18,8 +19,11 @@ METADATA_PATH = ARTIFACT_DIR / "metadata.json"
 ANOMALY_STATS_PATH = ARTIFACT_DIR / "anomaly_stats.json"
 TRAINING_METRICS_PATH = ARTIFACT_DIR / "training_metrics.json"
 
+logger = logging.getLogger(__name__)
+
 
 def ensure_directories() -> None:
+    logger.info("Ensuring backend directories exist: data=%s artifacts=%s", DATA_DIR, ARTIFACT_DIR)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-
+    logger.info("Backend directories are ready")

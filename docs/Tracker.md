@@ -60,6 +60,6 @@
 - `python -m pytest` from `backend`: 4 passed.
 - `npm run build` from `frontend`: passed.
 - `npm audit --omit=dev` from `frontend`: 0 vulnerabilities.
-- `GET http://localhost:8000/visionguard/health`: returned `{"status":"ok"}`.
+- `GET http://localhost:8000/visionguardv2/health`: returned `{"status":"ok"}`.
 - `GET http://localhost:5173`: returned HTTP 200.
-- Live `POST /visionguard/api/claims/analyze` for `LIVE001`: returned one High risk assessment with four triggered indicators, 0.818291 final risk score, and deterministic fallback narrative metadata.
+- Live `POST /visionguardv2/api/claims/analyze` for `LIVE001`: returned one High risk assessment with four triggered indicators, 0.818291 final risk score, and deterministic fallback narrative metadata.

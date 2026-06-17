@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import logging
 from typing import Literal
 
 import numpy as np
@@ -10,6 +11,8 @@ from app.utils.number_parsing import clean_numeric_series
 
 
 RuleMode = Literal["historical", "realtime"]
+
+logger = logging.getLogger(__name__)
 
 EXAM_CODES = {"92002", "92004", "92012", "92014", "S0620", "S0621"}
 ADDON_CODES = {"V2750", "V2755", "V2760"}
@@ -398,6 +401,7 @@ STRING_CLAIM_COLUMNS = [column for column in CANONICAL_CLAIM_COLUMNS if column n
 
 
 def normalize_claims(df: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Normalizing claims frame with shape=%s", df.shape)
     result = df.copy()
     for column in CANONICAL_CLAIM_COLUMNS:
         if column not in result.columns:
@@ -411,6 +415,7 @@ def normalize_claims(df: pd.DataFrame) -> pd.DataFrame:
 
     result["ProcedureCode"] = result["ProcedureCode"].astype(str).str.strip().str.upper()
     result["ServiceDate"] = pd.to_datetime(result["ServiceDateFrom"], errors="coerce")
+    logger.info("Claims normalization complete with shape=%s", result.shape)
     return result
 
 
@@ -427,6 +432,12 @@ def _safe_quantile(series: pd.Series, q: float) -> float:
 
 
 def apply_rules(df: pd.DataFrame, mode: RuleMode, context_df: pd.DataFrame | None = None) -> pd.DataFrame:
+    logger.info(
+        "Applying %s rules to %d row(s); context_rows=%s",
+        mode,
+        len(df),
+        len(context_df) if context_df is not None else 0,
+    )
     result = normalize_claims(df)
     procedure = result["ProcedureCode"].fillna("").astype(str).str.upper().str.strip()
     is_vision = _vision_code_mask(procedure)
@@ -460,10 +471,17 @@ def apply_rules(df: pd.DataFrame, mode: RuleMode, context_df: pd.DataFrame | Non
         rule_columns = REALTIME_RULE_COLUMNS
 
     result["Rule_Flag_Count"] = result[rule_columns].sum(axis=1).astype(int)
+    logger.info(
+        "%s rules applied: columns=%d total_flags=%d",
+        mode,
+        len(rule_columns),
+        int(result["Rule_Flag_Count"].sum()),
+    )
     return result
 
 
 def _apply_claim_day_context_rules(result: pd.DataFrame, context_df: pd.DataFrame | None = None) -> pd.DataFrame:
+    logger.info("Applying claim-day context rules to %d source row(s)", len(result))
     base = result.copy().reset_index(drop=True)
     base["_source_row"] = np.arange(len(base))
     base["_is_realtime_source"] = True
@@ -477,17 +495,23 @@ def _apply_claim_day_context_rules(result: pd.DataFrame, context_df: pd.DataFram
     else:
         combined = base
 
+    logger.info("Claim-day rule context combined row count=%d", len(combined))
     combined = _score_claim_day_rules(combined)
     scored = combined[combined["_is_realtime_source"]].copy()
     scored = scored.sort_values("_source_row").drop(columns=["_source_row", "_is_realtime_source"])
+    logger.info("Claim-day context rules applied")
     return scored.reset_index(drop=True)
 
 
 def _matching_claim_day_context(incoming: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Finding matching claim-day context rows")
     incoming_keys = incoming[["ClaimId", "ServiceDate"]].drop_duplicates()
     if incoming_keys.empty:
+        logger.info("No incoming claim-day keys found")
         return context.iloc[0:0].copy()
-    return context.merge(incoming_keys, on=["ClaimId", "ServiceDate"], how="inner")
+    matched = context.merge(incoming_keys, on=["ClaimId", "ServiceDate"], how="inner")
+    logger.info("Matched %d claim-day context row(s)", len(matched))
+    return matched
 
 
 def _claim_day_key(df: pd.DataFrame) -> pd.Series:
@@ -500,6 +524,7 @@ def _has_cci_pair(codes: set[str]) -> bool:
 
 
 def _score_claim_day_rules(df: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Scoring claim-day rules for %d row(s)", len(df))
     result = df.copy()
     result["_claim_day_key"] = _claim_day_key(result)
     code_sets = result.groupby("_claim_day_key")["ProcedureCode"].agg(
@@ -522,16 +547,19 @@ def _score_claim_day_rules(df: pd.DataFrame) -> pd.DataFrame:
         .apply(lambda col: col.str.strip().str.upper())
     )
     result["R103_Bilateral"] = modifiers.isin({"50", "LT", "RT"}).any(axis=1).astype(int)
+    logger.info("Claim-day rules scored")
     return result.drop(columns=["_claim_day_key", "_procedure_code_set"])
 
 
 def _apply_provider_rules(result: pd.DataFrame, procedure: pd.Series, charged: pd.Series) -> pd.DataFrame:
+    logger.info("Applying historical provider rules to %d row(s)", len(result))
     result = result.copy()
     result["is_exam"] = procedure.isin(EXAM_CODES).astype(int)
     exam_counts = result.groupby("ProviderNPI")["is_exam"].sum()
     exam_threshold = _safe_quantile(exam_counts, 0.99)
     result["provider_exam_count"] = result["ProviderNPI"].map(exam_counts).fillna(0)
     result["R013_Provider_High_Exam_Volume_Flag"] = (result["provider_exam_count"] >= exam_threshold).astype(int)
+    logger.info("Provider exam volume threshold=%.6f", exam_threshold)
 
     result["is_material"] = procedure.str.startswith("V").astype(int)
     material_counts = result.groupby("ProviderNPI")["is_material"].sum()
@@ -540,6 +568,7 @@ def _apply_provider_rules(result: pd.DataFrame, procedure: pd.Series, charged: p
     result["R014_Provider_High_Material_Volume_Flag"] = (
         result["provider_material_count"] >= material_threshold
     ).astype(int)
+    logger.info("Provider material volume threshold=%.6f", material_threshold)
 
     provider_avg_billed = charged.groupby(result["ProviderNPI"]).mean()
     billed_threshold = _safe_quantile(provider_avg_billed, 0.99)
@@ -547,6 +576,7 @@ def _apply_provider_rules(result: pd.DataFrame, procedure: pd.Series, charged: p
     result["R015_Provider_High_Avg_Billed_Flag"] = (
         result["provider_avg_billed"] >= billed_threshold
     ).astype(int)
+    logger.info("Provider average billed threshold=%.6f", billed_threshold)
 
     result["is_addon"] = procedure.isin(ADDON_CODES).astype(int)
     addon_count = result.groupby("ProviderNPI")["is_addon"].sum()
@@ -557,7 +587,9 @@ def _apply_provider_rules(result: pd.DataFrame, procedure: pd.Series, charged: p
     result["R016_Provider_High_Addon_Usage_Flag"] = (
         result["provider_addon_ratio"] >= addon_threshold
     ).astype(int)
+    logger.info("Provider add-on usage threshold=%.6f", addon_threshold)
 
+    logger.info("Historical provider rules applied")
     return result
 
 
@@ -574,6 +606,7 @@ def _business_rule_realtime_status(rule_ids: tuple[str, ...]) -> str:
 
 
 def rule_definitions_for_workbook() -> list[dict[str, str]]:
+    logger.info("Building business rule catalog rows")
     rows = []
     catalog_only_note = (
         "Cataloged from business rules; deterministic implementation requires additional source data "
@@ -603,11 +636,13 @@ def rule_definitions_for_workbook() -> list[dict[str, str]]:
                 "Implementation Notes": implementation.notes,
             }
         )
+    logger.info("Built %d business rule catalog row(s)", len(rows))
     return rows
 
 
 def executable_rule_definitions_for_workbook() -> list[dict[str, str]]:
-    return [
+    logger.info("Building executable rule definition rows")
+    rows = [
         {
             "Rule Id": rule.rule_id,
             "Rule Name": rule.name,
@@ -619,12 +654,16 @@ def executable_rule_definitions_for_workbook() -> list[dict[str, str]]:
         }
         for rule in RULE_DEFINITIONS
     ]
+    logger.info("Built %d executable rule definition row(s)", len(rows))
+    return rows
 
 
 def triggered_indicators(row: pd.Series, mode: RuleMode) -> list[dict[str, str]]:
+    logger.info("Collecting triggered indicators for mode=%s", mode)
     columns = HISTORICAL_RULE_COLUMNS if mode == "historical" else REALTIME_RULE_COLUMNS
     indicators = []
     for column in columns:
         if int(row.get(column, 0) or 0) > 0:
             indicators.append(asdict(RULES_BY_COLUMN[column]))
+    logger.info("Collected %d triggered indicator(s)", len(indicators))
     return indicators

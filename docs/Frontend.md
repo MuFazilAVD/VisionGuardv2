@@ -52,7 +52,7 @@ The shell provides:
 
 Retraining is reduced to a single workflow button:
 
-- "Sync Engine" calls `POST /visionguard/api/training/retrain`.
+- "Sync Engine" calls `POST /visionguardv2/api/training/retrain`.
 - The workspace refreshes sample data after sync.
 - Sync feedback is shown inline only when the action completes or fails.
 

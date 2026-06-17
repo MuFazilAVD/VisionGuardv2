@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime
+import logging
 from typing import Any
 
 import pandas as pd
@@ -15,21 +17,30 @@ from app.repositories.data_repository import DataRepository
 from app.services.llm_service import LLMNarrativeService
 from app.services.training_service import TrainingService
 
+logger = logging.getLogger(__name__)
+
 
 class RealtimeService:
     def __init__(self) -> None:
+        logger.info("Initializing realtime service")
         self.artifact_repository = ArtifactRepository()
         self.data_repository = DataRepository()
         self.training_service = TrainingService()
         self.llm_service = LLMNarrativeService()
 
     def analyze_claims(self, claims: list[dict[str, Any]]) -> dict[str, Any]:
+        logger.info("Starting realtime analysis for %d claim(s)", len(claims))
         if not claims:
+            logger.info("Realtime analysis rejected because no claims were submitted")
             raise ValueError("Submit at least one claim for realtime assessment.")
 
         if not self.training_service.artifacts_current():
+            logger.info("Training artifacts are missing or stale; retraining before realtime scoring")
             self.training_service.retrain()
+        else:
+            logger.info("Training artifacts are current")
 
+        logger.info("Loading training bundle for realtime scoring")
         bundle = self.artifact_repository.load_training_bundle()
         model = bundle["model"]
         feature_pipeline = bundle["feature_pipeline"]
@@ -37,18 +48,26 @@ class RealtimeService:
         anomaly_stats = bundle["anomaly_stats"]
 
         incoming = pd.DataFrame(claims)
+        logger.info("Incoming claims frame created with shape=%s", incoming.shape)
         historical = self.data_repository.load_historical_claims()
+        logger.info("Loaded historical context with %d row(s)", len(historical))
         ruled = apply_rules(incoming, mode="realtime", context_df=historical)
+        logger.info("Realtime rules applied; total triggered flags=%d", int(ruled["Rule_Flag_Count"].sum()))
         scored_base = add_billed_allowed_ratio(ruled)
         features = prepare_feature_frame(scored_base)
+        logger.info("Prepared realtime feature frame with shape=%s", features.shape)
         encoded = feature_pipeline.transform(features)
+        logger.info("Realtime feature encoding complete with shape=%s", getattr(encoded, "shape", "<unknown>"))
         probabilities = model.predict_proba(encoded)
         predictions = model.predict(encoded)
         predicted_patterns = label_encoder.inverse_transform(predictions)
         confidence_scores = probabilities.max(axis=1)
+        logger.info("ML predictions completed for %d claim(s)", len(predicted_patterns))
         anomaly_scores, anomaly_normalized, top_features = score_anomalies(scored_base, anomaly_stats)
+        logger.info("Anomaly scoring completed for %d claim(s)", len(anomaly_scores))
         historical_ruled = apply_rules(historical, mode="historical")
         similarity_matches = score_historical_similarity(scored_base, historical_ruled, anomaly_stats)
+        logger.info("Historical similarity scoring completed for %d claim(s)", len(similarity_matches))
 
         assessments = []
         for idx, row in scored_base.reset_index(drop=True).iterrows():
@@ -125,14 +144,74 @@ class RealtimeService:
                     },
                 }
             )
+            logger.info(
+                "Realtime assessment built: claim_id=%s line=%s risk=%s score=%.6f rules=%d pattern=%s",
+                context["claim_id"],
+                context["line_number"],
+                risk_level,
+                final_score,
+                rule_count,
+                final_pattern,
+            )
 
-        return {
+        batch_summary = self._build_batch_summary(assessments)
+        batch_narrative = self.llm_service.generate_for_batch(
+            {
+                **batch_summary,
+                "top_categories": self._top_counts(assessment["category"] for assessment in assessments),
+                "top_reasons": self._top_counts(assessment["top_reason"] for assessment in assessments),
+            }
+        )
+
+        result = {
             "processed_at": datetime.now(UTC).isoformat(),
             "count": len(assessments),
+            "batch_summary": {
+                **batch_summary,
+                "summary": batch_narrative["summary"],
+                "metadata": batch_narrative["metadata"],
+            },
             "assessments": assessments,
         }
+        logger.info("Realtime analysis completed with %d assessment(s)", len(assessments))
+        return result
+
+    def _build_batch_summary(self, assessments: list[dict[str, Any]]) -> dict[str, Any]:
+        total = len(assessments)
+        high = sum(1 for assessment in assessments if assessment["risk_level"] == "High")
+        medium = sum(1 for assessment in assessments if assessment["risk_level"] == "Medium")
+        low = sum(1 for assessment in assessments if assessment["risk_level"] == "Low")
+        average_score = (
+            sum(float(assessment["final_risk_score"]) for assessment in assessments) / total
+            if total
+            else 0.0
+        )
+
+        logger.info(
+            "Batch summary counts: total=%d high=%d medium=%d low=%d",
+            total,
+            high,
+            medium,
+            low,
+        )
+        return {
+            "total_claims": total,
+            "fraud_count": high,
+            "suspicious_count": medium,
+            "clean_count": low,
+            "high_risk_count": high,
+            "medium_risk_count": medium,
+            "low_risk_count": low,
+            "review_count": high + medium,
+            "average_risk_score": round(float(average_score), 6),
+        }
+
+    def _top_counts(self, values: Any) -> list[dict[str, Any]]:
+        counts = Counter(str(value) for value in values if str(value or "").strip())
+        return [{"name": name, "count": count} for name, count in counts.most_common(3)]
 
     def _public_indicators(self, indicators: list[dict[str, Any]]) -> list[dict[str, str]]:
+        logger.info("Preparing %d public triggered indicator(s)", len(indicators))
         return [
             {
                 "rule_id": item["rule_id"],
@@ -153,8 +232,11 @@ class RealtimeService:
         if similarity["similarity_above_threshold"]:
             pattern = similarity["historical_pattern"]
             family = similarity["historical_pattern_family"]
+            logger.info("Categorized claim as historical match: pattern=%s family=%s", pattern, family)
             return "Historical Fraud Pattern Match", f"Matches historical pattern: {pattern} ({family})"
         if indicators:
             first = indicators[0]
+            logger.info("Categorized claim from first triggered indicator: %s", first["name"])
             return first["category"], first["name"]
+        logger.info("Categorized claim from anomaly top feature: %s", top_feature)
         return "Billing Pattern", f"Unexpected pattern in {top_feature}"

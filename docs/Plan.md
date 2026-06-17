@@ -58,10 +58,10 @@ Rebuild the existing Fabric/Synapse/Spark notebook implementation as a local Fas
 
 ### Phase 3: API
 
-- `POST /visionguard/api/training/retrain`
-- `GET /visionguard/api/training/status`
-- `POST /visionguard/api/claims/analyze`
-- `GET /visionguard/api/sample-data`
+- `POST /visionguardv2/api/training/retrain`
+- `GET /visionguardv2/api/training/status`
+- `POST /visionguardv2/api/claims/analyze`
+- `GET /visionguardv2/api/sample-data`
 
 ### Phase 4: Frontend
 

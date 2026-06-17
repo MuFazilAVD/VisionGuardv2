@@ -5,8 +5,8 @@ from app.schemas.claim import validate_claim_payload
 
 
 client = TestClient(app)
-API_PREFIX = "/visionguard/api"
-HEALTH_PATH = "/visionguard/health"
+API_PREFIX = "/visionguardv2/api"
+HEALTH_PATH = "/visionguardv2/health"
 
 
 def test_sample_data_and_status_endpoints():
@@ -62,6 +62,9 @@ def test_claim_analyze_json_endpoint():
     assert response.status_code == 200
     body = response.json()
     assert body["count"] == 1
+    assert body["batch_summary"]["total_claims"] == 1
+    assert body["batch_summary"]["fraud_count"] in {0, 1}
+    assert body["batch_summary"]["summary"]
     assert body["assessments"][0]["triggered_indicators"][0]["rule_id"] == "R009"
 
 

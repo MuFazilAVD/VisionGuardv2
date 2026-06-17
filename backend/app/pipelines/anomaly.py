@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 from typing import Any
 
 import numpy as np
@@ -20,17 +21,23 @@ BUSINESS_FEATURE_LABELS = {
     "BilledAllowedRatio": "billed-to-allowed relationship",
 }
 
+logger = logging.getLogger(__name__)
+
 
 def _numeric_matrix(df: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Building numeric anomaly matrix for %d row(s)", len(df))
     result = add_billed_allowed_ratio(df)
     for column in NUMERIC_FEATURES:
         if column not in result.columns:
             result[column] = 0.0
         result[column] = clean_numeric_series(result[column], index=result.index).astype(float)
-    return result[NUMERIC_FEATURES]
+    numeric = result[NUMERIC_FEATURES]
+    logger.info("Numeric anomaly matrix ready with shape=%s", numeric.shape)
+    return numeric
 
 
 def compute_anomaly_stats(df: pd.DataFrame) -> dict[str, Any]:
+    logger.info("Computing anomaly stats for %d row(s)", len(df))
     numeric = _numeric_matrix(df)
     means = numeric.mean().to_dict()
     stds = numeric.std(ddof=1).replace(0, 1.0).fillna(1.0).to_dict()
@@ -38,13 +45,15 @@ def compute_anomaly_stats(df: pd.DataFrame) -> dict[str, Any]:
     max_score = float(np.max(raw_scores)) if len(raw_scores) else 1.0
     if max_score == 0:
         max_score = 1.0
-    return {
+    stats = {
         "features": NUMERIC_FEATURES,
         "means": {key: float(value) for key, value in means.items()},
         "stds": {key: float(value) if value else 1.0 for key, value in stds.items()},
         "max_anomaly_score": max_score,
         "computed_at": datetime.now(UTC).isoformat(),
     }
+    logger.info("Anomaly stats computed with max_anomaly_score=%.6f", max_score)
+    return stats
 
 
 def score_anomalies(
@@ -53,6 +62,7 @@ def score_anomalies(
     *,
     clip: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    logger.info("Scoring anomalies for %d row(s); clip=%s", len(df), clip)
     numeric = _numeric_matrix(df)
     means = pd.Series(stats["means"], dtype=float)
     stds = pd.Series(stats["stds"], dtype=float).replace(0, 1.0).fillna(1.0)
@@ -66,4 +76,5 @@ def score_anomalies(
     if clip:
         normalized = np.clip(normalized, 0.0, 1.0)
     top_features = z.abs().idxmax(axis=1).map(BUSINESS_FEATURE_LABELS).tolist()
+    logger.info("Anomaly scoring complete for %d row(s)", len(scores))
     return scores, normalized, top_features

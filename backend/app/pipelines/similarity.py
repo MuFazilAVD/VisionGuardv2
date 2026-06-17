@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import numpy as np
@@ -34,6 +35,8 @@ PATTERN_PRIORITIES = {
     "Bilateral Claims": "Medium",
 }
 
+logger = logging.getLogger(__name__)
+
 
 def score_historical_similarity(
     realtime: pd.DataFrame,
@@ -42,15 +45,24 @@ def score_historical_similarity(
     *,
     threshold: float = SIMILARITY_THRESHOLD,
 ) -> list[dict[str, Any]]:
+    logger.info(
+        "Scoring historical similarity: realtime_rows=%d historical_rows=%d threshold=%.3f",
+        len(realtime),
+        len(historical),
+        threshold,
+    )
     if realtime.empty:
+        logger.info("Historical similarity skipped because realtime frame is empty")
         return []
     if historical.empty or "Flag" not in historical.columns:
+        logger.info("Historical similarity using defaults because historical data or Flag column is missing")
         return [_default_result() for _ in range(len(realtime))]
 
     rt = _prepare_frame(realtime).reset_index(drop=True)
     hist = _prepare_frame(historical).reset_index(drop=True)
     hist = hist[hist["Flag"].fillna("").astype(str).str.strip() != ""].copy()
     if hist.empty:
+        logger.info("Historical similarity using defaults because no flagged historical rows were found")
         return [_default_result() for _ in range(len(rt))]
 
     results: list[dict[str, Any]] = []
@@ -60,11 +72,13 @@ def score_historical_similarity(
             candidates = candidates[candidates[key] == row[key]]
 
         if candidates.empty:
+            logger.info("No historical similarity candidates for claim_id=%s", row.get("ClaimId", ""))
             results.append(_default_result())
             continue
 
         scores = _candidate_scores(row, candidates, anomaly_stats)
         if scores.size == 0:
+            logger.info("No historical similarity scores for claim_id=%s", row.get("ClaimId", ""))
             results.append(_default_result())
             continue
 
@@ -76,6 +90,13 @@ def score_historical_similarity(
 
         pattern = str(best.get("Flag", "") or "").strip()
         above_threshold = best_score >= threshold
+        logger.info(
+            "Historical similarity best match: claim_id=%s score=%.6f above_threshold=%s pattern=%s",
+            row.get("ClaimId", ""),
+            best_score,
+            above_threshold,
+            pattern if above_threshold else "NONE",
+        )
         results.append(
             {
                 "similarity_score": round(best_score, 6),
@@ -89,10 +110,12 @@ def score_historical_similarity(
             }
         )
 
+    logger.info("Historical similarity scoring complete with %d result(s)", len(results))
     return results
 
 
 def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
+    logger.info("Preparing frame for historical similarity with shape=%s", df.shape)
     result = df.copy()
     for key in JOIN_KEYS:
         if key not in result.columns:
@@ -107,10 +130,12 @@ def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
         if feature not in result.columns:
             result[feature] = 0.0
         result[feature] = clean_numeric_series(result[feature], index=result.index).astype(float)
+    logger.info("Similarity frame prepared with shape=%s", result.shape)
     return result
 
 
 def _candidate_scores(row: pd.Series, candidates: pd.DataFrame, anomaly_stats: dict[str, Any]) -> np.ndarray:
+    logger.info("Computing similarity scores for %d candidate row(s)", len(candidates))
     rt_vector = _z_vector(row, anomaly_stats)
     hist_matrix = np.vstack([_z_vector(candidate, anomaly_stats) for _, candidate in candidates.iterrows()])
     rt_norm = float(np.linalg.norm(rt_vector))
@@ -124,6 +149,7 @@ def _candidate_scores(row: pd.Series, candidates: pd.DataFrame, anomaly_stats: d
     if not rt_is_exam:
         bad_exam_mismatch = candidates["Flag"].fillna("").astype(str).str.lower().eq("two exams in one day")
         scores[bad_exam_mismatch.to_numpy()] = 0.0
+    logger.info("Similarity candidate scoring complete")
     return scores
 
 
@@ -150,6 +176,7 @@ def _case_priority(pattern: str) -> str:
 
 
 def _default_result() -> dict[str, Any]:
+    logger.info("Using default historical similarity result")
     return {
         "similarity_score": 0.0,
         "similarity_above_threshold": False,
