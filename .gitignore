@@ -1,0 +1,69 @@
+# Dependencies and local virtual environments
+node_modules/
+frontend/node_modules/
+venv/
+backend/venv/
+.venv/
+env/
+ENV/
+
+# Python bytecode, test caches, and tooling output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.ipynb_checkpoints/
+
+# Frontend build and TypeScript caches
+frontend/dist/
+dist/
+build/
+*.tsbuildinfo
+.vite/
+.cache/
+coverage/
+
+# Backend generated data and model artifacts
+backend/artifacts/
+backend/app/data/historical_claims.csv
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and editor metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak

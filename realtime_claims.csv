@@ -1,0 +1,4 @@
+ClaimId,Gender,Age,ServiceDateFrom,PlaceOfService,LineNumber,ProcedureCode,ProcedureName,Modifier,Modifier2,Modifier3,Primary_Diagnosis_Pointer,Primary_Diagnosis,LONG_DESCRIPTION,ClaimLineTotalPaid,AmtCharged,AllowedUnits,AmtDisallowed,AmtEligible,AmtCopay,AmtCoinsurance,AmtDeductible,ProviderNPI,GroupId,GroupNumber,LOB,CoverageCode,State
+RT001,F,45,5/12/2024,11,1,99213,Office Visit Established Patient,25,,,1,H52.4,Routine eye exam,80,120,1,0,100,20,0,0,1234567890,G1,GRP100,COMM,PPO,OH
+RT002,M,67,4/3/2024,22,1,92014,Comprehensive Eye Exam,59,,,1,E11.9,Diabetes type 2 without complications,0,180,2,20,150,0,0,0,9988776655,G2,GRP200,MEDICARE,HMO,FL
+RT003,F,32,6/1/2024,11,1,99213,Office Visit Established Patient,,,,1,J02.9,"Acute pharyngitis, unspecified",50,95,1,0,90,5,0,0,5566778899,G3,GRP300,COMM,EPO,TX
