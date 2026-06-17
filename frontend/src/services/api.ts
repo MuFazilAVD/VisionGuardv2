@@ -9,6 +9,7 @@ import type {
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.PROD ? "https://d2brdeqy144bwg.cloudfront.net" : "http://localhost:8000");
+const API_PREFIX = "/visionguard/api";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -27,19 +28,19 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function getTrainingStatus() {
-  return requestJson<TrainingStatus>("/api/training/status");
+  return requestJson<TrainingStatus>(`${API_PREFIX}/training/status`);
 }
 
 export function retrainAssessmentEngine() {
-  return requestJson<TrainingResponse>("/api/training/retrain", { method: "POST" });
+  return requestJson<TrainingResponse>(`${API_PREFIX}/training/retrain`, { method: "POST" });
 }
 
 export function getSampleData() {
-  return requestJson<SampleDataResponse>("/api/sample-data");
+  return requestJson<SampleDataResponse>(`${API_PREFIX}/sample-data`);
 }
 
 export function analyzeClaims(claims: ClaimRecord[]) {
-  return requestJson<AnalyzeResponse>("/api/claims/analyze", {
+  return requestJson<AnalyzeResponse>(`${API_PREFIX}/claims/analyze`, {
     method: "POST",
     body: JSON.stringify({ claims })
   });

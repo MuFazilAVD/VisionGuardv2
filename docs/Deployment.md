@@ -62,7 +62,7 @@ https://d2brdeqy144bwg.cloudfront.net
 Start the backend and call:
 
 ```bash
-curl -X POST http://localhost:8000/api/training/retrain
+curl -X POST http://localhost:8000/visionguard/api/training/retrain
 ```
 
 This will create or refresh:
@@ -81,7 +81,7 @@ This will create or refresh:
 JSON:
 
 ```bash
-curl -X POST http://localhost:8000/api/claims/analyze \
+curl -X POST http://localhost:8000/visionguard/api/claims/analyze \
   -H "Content-Type: application/json" \
   -d '{"claims":[...]}' 
 ```
@@ -89,7 +89,7 @@ curl -X POST http://localhost:8000/api/claims/analyze \
 CSV:
 
 ```bash
-curl -X POST http://localhost:8000/api/claims/analyze \
+curl -X POST http://localhost:8000/visionguard/api/claims/analyze \
   -F "file=@../realtime_claims.csv"
 ```
 
@@ -116,4 +116,3 @@ npm run build
 - Configure the frontend `VITE_API_BASE_URL` to the production backend base URL.
 - Store LLM credentials as secrets.
 - This POC does not include authentication, authorization, audit logging, or PHI-grade compliance controls.
-

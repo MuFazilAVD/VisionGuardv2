@@ -6,6 +6,9 @@ from app.api.sample_data import router as sample_data_router
 from app.api.training import router as training_router
 from app.utils.config import get_settings
 
+API_PREFIX = "/visionguard/api"
+HEALTH_PATH = "/visionguard/health"
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -23,11 +26,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(training_router, prefix="/api/training", tags=["training"])
-    app.include_router(claims_router, prefix="/api/claims", tags=["claims"])
-    app.include_router(sample_data_router, prefix="/api", tags=["sample-data"])
+    app.include_router(training_router, prefix=f"{API_PREFIX}/training", tags=["training"])
+    app.include_router(claims_router, prefix=f"{API_PREFIX}/claims", tags=["claims"])
+    app.include_router(sample_data_router, prefix=API_PREFIX, tags=["sample-data"])
 
-    @app.get("/health")
+    @app.get(HEALTH_PATH)
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
@@ -35,4 +38,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

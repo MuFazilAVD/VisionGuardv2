@@ -5,20 +5,25 @@ from app.schemas.claim import validate_claim_payload
 
 
 client = TestClient(app)
+API_PREFIX = "/visionguard/api"
+HEALTH_PATH = "/visionguard/health"
 
 
 def test_sample_data_and_status_endpoints():
-    sample = client.get("/api/sample-data")
+    health = client.get(HEALTH_PATH)
+    assert health.status_code == 200
+
+    sample = client.get(f"{API_PREFIX}/sample-data")
     assert sample.status_code == 200
     assert sample.json()["historical_claims"]["record_count"] >= 5000
 
-    status = client.get("/api/training/status")
+    status = client.get(f"{API_PREFIX}/training/status")
     assert status.status_code == 200
     assert "trained" in status.json()
 
 
 def test_claim_analyze_json_endpoint():
-    client.post("/api/training/retrain")
+    client.post(f"{API_PREFIX}/training/retrain")
     payload = {
         "claims": [
             {
@@ -53,7 +58,7 @@ def test_claim_analyze_json_endpoint():
             }
         ]
     }
-    response = client.post("/api/claims/analyze", json=payload)
+    response = client.post(f"{API_PREFIX}/claims/analyze", json=payload)
     assert response.status_code == 200
     body = response.json()
     assert body["count"] == 1
