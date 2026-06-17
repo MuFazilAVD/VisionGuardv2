@@ -23,7 +23,10 @@ class DataRepository:
         return pd.read_csv(ROOT_REALTIME_CLAIMS, dtype={"ProviderNPI": str, "ProcedureCode": str})
 
     def load_rules(self) -> pd.DataFrame:
-        return pd.read_excel(RULES_XLSX_PATH)
+        try:
+            return pd.read_excel(RULES_XLSX_PATH, sheet_name="Business Rules", dtype=str).fillna("")
+        except ValueError:
+            return pd.read_excel(RULES_XLSX_PATH, dtype=str).fillna("")
 
     def historical_exists(self) -> bool:
         return HISTORICAL_CLAIMS_PATH.exists()

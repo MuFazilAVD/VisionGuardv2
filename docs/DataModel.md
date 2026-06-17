@@ -49,14 +49,41 @@ The generated historical dataset includes:
 
 `backend/app/data/rules.xlsx`
 
+The workbook has two sheets:
+
+- `Business Rules`: the business rule catalog from the supplied operational definitions.
+- `Executable Rules`: the deterministic POC rules currently scored by code.
+
+### `Business Rules`
+
 | Column | Purpose |
 | --- | --- |
-| Rule Id | Stable business rule id, for example R006. |
-| Rule Name | Business-friendly name. |
-| Description | Plain-language description. |
-| Trigger Logic | Editable plain-language trigger definition. |
+| Section | Catalog section, for example Operational Rules, Shared Client Risks, or Special. |
+| Item | Business item number or topic label. |
+| Analysis | Business analysis or category label. |
+| Risk Level | Numeric risk level from the supplied catalog. |
+| Operational Definition | Business rule description. |
+| Routine | `x` when the rule applies to routine claims. |
+| Medical | `x` when the rule applies to medical claims. |
+| Both | `x` when the rule applies to both routine and medical claims. |
+| Frequency | Frequency marker from the supplied catalog. |
+| Implementation Status | `Executable` when mapped to a current deterministic POC rule, otherwise `Catalog Only`. |
+| Executable Rule Ids | Current POC rule ids mapped to the business rule. |
+| Executable Flag Columns | Output columns produced by those POC rule ids. |
+| Realtime Supported | Whether the mapped executable rule can run in realtime mode. |
+| Implementation Notes | Notes about implemented scope or missing source data. |
+
+### `Executable Rules`
+
+| Column | Purpose |
+| --- | --- |
+| Rule Id | Stable executable rule id, for example R006. |
+| Rule Name | Business-friendly executable rule name. |
+| Description | Plain-language executable rule description. |
+| Trigger Logic | Deterministic trigger definition. |
 | Severity | Low, Medium, or High. |
 | Category | Rule category used for business grouping. |
+| Realtime Supported | Whether the executable rule can run in realtime mode. |
 
 ## Rule Output Schema
 
@@ -71,6 +98,10 @@ Historical rule columns:
 - `R015_Provider_High_Avg_Billed_Flag`
 - `R016_Provider_High_Addon_Usage_Flag`
 - `R017_Missing_Diagnosis_Flag`
+- `R100_Two_Exams_One_Day`
+- `R101_Exam_After_Comprehensive`
+- `R102_CCI_Edit`
+- `R103_Bilateral`
 - `Rule_Flag_Count`
 
 Realtime rule columns:
@@ -80,6 +111,10 @@ Realtime rule columns:
 - `R008_Excessive_Units_Exam_Flag`
 - `R009_Invalid_Vision_Code_Flag`
 - `R017_Missing_Diagnosis_Flag`
+- `R100_Two_Exams_One_Day`
+- `R101_Exam_After_Comprehensive`
+- `R102_CCI_Edit`
+- `R103_Bilateral`
 - `Rule_Flag_Count`
 
 ## Artifact Schema
@@ -138,4 +173,3 @@ Scikit-Learn `RandomForestClassifier` trained on encoded features.
 ### `encoders.joblib`
 
 Auxiliary encoding metadata. The current implementation stores a label encoder and feature lists.
-

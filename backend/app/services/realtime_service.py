@@ -24,8 +24,8 @@ class RealtimeService:
         self.llm_service = LLMNarrativeService()
 
     def analyze_claims(self, claims: list[dict[str, Any]]) -> dict[str, Any]:
-        if not 1 <= len(claims) <= 5:
-            raise ValueError("Submit between 1 and 5 claims for realtime assessment.")
+        if not claims:
+            raise ValueError("Submit at least one claim for realtime assessment.")
 
         if not self.training_service.artifacts_current():
             self.training_service.retrain()

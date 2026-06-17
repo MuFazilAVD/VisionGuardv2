@@ -1,6 +1,6 @@
 import pandas as pd
 
-from app.pipelines.rules_engine import apply_rules
+from app.pipelines.rules_engine import apply_rules, executable_rule_definitions_for_workbook, rule_definitions_for_workbook
 
 
 def test_realtime_rules_trigger_expected_flags():
@@ -91,3 +91,26 @@ def test_realtime_rules_use_historical_claim_day_context():
 
     assert scored.loc[0, "R100_Two_Exams_One_Day"] == 1
     assert scored.loc[0, "R101_Exam_After_Comprehensive"] == 1
+
+
+def test_business_rule_catalog_matches_pasted_rules():
+    rules = rule_definitions_for_workbook()
+    executable_rules = executable_rule_definitions_for_workbook()
+
+    assert len(rules) == 75
+    assert rules[0]["Section"] == "Operational Rules"
+    assert rules[0]["Item"] == "1"
+    assert rules[0]["Risk Level"] == "2"
+    assert "Correct Coding Edits" in rules[0]["Operational Definition"]
+    assert rules[-1]["Section"] == "Special"
+    assert rules[-1]["Operational Definition"] == "PPE"
+
+    modifier_59_rule = next(
+        rule
+        for rule in rules
+        if rule["Section"] == "Operational Rules" and rule["Item"] == "38"
+    )
+    assert modifier_59_rule["Implementation Status"] == "Executable"
+    assert modifier_59_rule["Executable Rule Ids"] == "R006"
+
+    assert len(executable_rules) == 13

@@ -44,13 +44,3 @@ export function analyzeClaims(claims: ClaimRecord[]) {
     body: JSON.stringify({ claims })
   });
 }
-
-export function analyzeCsv(file: File) {
-  const form = new FormData();
-  form.append("file", file);
-  return requestJson<AnalyzeResponse>("/api/claims/analyze", {
-    method: "POST",
-    body: form
-  });
-}
-

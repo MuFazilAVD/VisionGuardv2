@@ -77,3 +77,21 @@ def test_claim_payload_accepts_currency_strings():
 
     assert claims[0]["AmtCharged"] == 130.0
     assert claims[0]["AmtEligible"] == 58.35
+
+
+def test_claim_payload_accepts_more_than_five_claims():
+    claims = validate_claim_payload(
+        {
+            "claims": [
+                {
+                    "ClaimId": f"BATCH{i:03d}",
+                    "ProcedureCode": "92014",
+                    "AmtCharged": 150,
+                    "AmtEligible": 120,
+                }
+                for i in range(8)
+            ]
+        }
+    )
+
+    assert len(claims) == 8

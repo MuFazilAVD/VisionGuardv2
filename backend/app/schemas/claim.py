@@ -102,6 +102,6 @@ def validate_claim_payload(payload: Any) -> list[dict[str, Any]]:
         raise ValueError("Request body must be a claim list or an object with a claims list.")
 
     claims = [ClaimInput.model_validate(item).model_dump() for item in raw_claims]
-    if not 1 <= len(claims) <= 5:
-        raise ValueError("Submit between 1 and 5 claims for realtime assessment.")
+    if not claims:
+        raise ValueError("Submit at least one claim for realtime assessment.")
     return claims

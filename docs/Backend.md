@@ -95,7 +95,7 @@ Accepts either:
 - JSON body with `claims`.
 - Multipart form upload with a CSV file field named `file`.
 
-Supports one to five claims per request.
+Supports one or more claims per request.
 
 JSON request:
 
@@ -203,7 +203,6 @@ Example response:
 ## Error Handling
 
 - Missing artifacts on claim analysis trigger automatic training from generated data.
-- Invalid claim count returns HTTP 400.
+- Empty claim submissions return HTTP 400.
 - Missing required claim fields returns HTTP 422.
 - LLM failures do not fail claim assessment. The narrative service returns fallback text and metadata.
-

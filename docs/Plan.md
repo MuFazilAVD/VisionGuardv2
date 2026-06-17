@@ -68,7 +68,7 @@ Rebuild the existing Fabric/Synapse/Spark notebook implementation as a local Fas
 - Create Vite React TypeScript app.
 - Configure Tailwind.
 - Add shadcn-style local UI primitives.
-- Build dashboard, retraining, claim review, and results views.
+- Build a single claim assessment workspace with engine sync, data upload, full-schema editing, and inline results.
 - Use business-friendly language only in UI.
 - Add API service with environment-configurable backend URL.
 
@@ -97,7 +97,7 @@ Rebuild the existing Fabric/Synapse/Spark notebook implementation as a local Fas
 - React, TypeScript, and Vite.
 - Tailwind CSS.
 - Local shadcn-style primitives, not a generated shadcn CLI dependency.
-- Lucide icons for common actions.
+- Phosphor icons for common actions.
 - No technical model terminology in visible UI.
 
 ## Risks and Mitigations
@@ -106,4 +106,3 @@ Rebuild the existing Fabric/Synapse/Spark notebook implementation as a local Fas
 - The original historical `claims.csv` and `Sample_Rules_For_ML.xlsx` are missing. Mitigation: generate realistic replacements that preserve schema and rule coverage.
 - Realtime notebook normalized anomaly scores within the incoming mini-batch, while the business requirement asks for persisted anomaly stats. Mitigation: persist training `max_anomaly_score` and clip normalized realtime anomaly scores to 1.0 for stable single-claim behavior.
 - LLM credentials may be absent locally. Mitigation: deterministic fallback returns complete narrative sections and metadata.
-

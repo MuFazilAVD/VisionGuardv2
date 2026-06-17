@@ -1,0 +1,619 @@
+import {
+  ArrowsClockwise,
+  CheckCircle,
+  ClipboardText,
+  Fingerprint,
+  Gauge,
+  ListChecks,
+  Plus,
+  SealCheck,
+  ShieldWarning,
+  Target,
+  Trash,
+  UploadSimple,
+  WarningCircle
+} from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+
+import { RiskBadge } from "../components/RiskBadge";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Table, TBody, TD, TH, THead, TR } from "../components/ui/table";
+import { analyzeClaims } from "../services/api";
+import type {
+  AnalyzeResponse,
+  ClaimRecord,
+  SampleDataResponse,
+  TrainingResponse
+} from "../types/api";
+
+const editableColumns = [
+  "ClaimId",
+  "Gender",
+  "Age",
+  "ServiceDateFrom",
+  "PlaceOfService",
+  "LineNumber",
+  "ProcedureCode",
+  "ProcedureName",
+  "Modifier",
+  "Modifier2",
+  "Modifier3",
+  "Primary_Diagnosis_Pointer",
+  "Primary_Diagnosis",
+  "LONG_DESCRIPTION",
+  "ClaimLineTotalPaid",
+  "AmtCharged",
+  "AllowedUnits",
+  "AmtDisallowed",
+  "AmtEligible",
+  "AmtCopay",
+  "AmtCoinsurance",
+  "AmtDeductible",
+  "ProviderNPI",
+  "GroupId",
+  "GroupNumber",
+  "LOB",
+  "CoverageCode",
+  "State"
+];
+
+type ClaimWorkspaceProps = {
+  loading: boolean;
+  sampleData: SampleDataResponse | null;
+  syncing: boolean;
+  onSync: () => Promise<TrainingResponse>;
+};
+
+function blankClaim(): ClaimRecord {
+  return {
+    ClaimId: `NEW${Date.now().toString().slice(-5)}`,
+    Gender: "U",
+    Age: 40,
+    ServiceDateFrom: "2024-06-01",
+    PlaceOfService: "11",
+    LineNumber: 1,
+    ProcedureCode: "92014",
+    ProcedureName: "Comprehensive Eye Exam",
+    Modifier: "",
+    Modifier2: "",
+    Modifier3: "",
+    Primary_Diagnosis_Pointer: "1",
+    Primary_Diagnosis: "H52.4",
+    LONG_DESCRIPTION: "Routine eye exam",
+    ClaimLineTotalPaid: 0,
+    AmtCharged: 150,
+    AllowedUnits: 1,
+    AmtDisallowed: 0,
+    AmtEligible: 120,
+    AmtCopay: 0,
+    AmtCoinsurance: 0,
+    AmtDeductible: 0,
+    ProviderNPI: "1234567890",
+    GroupId: "G1",
+    GroupNumber: "GRP100",
+    LOB: "COMM",
+    CoverageCode: "PPO",
+    State: "OH"
+  };
+}
+
+export default function ClaimWorkspace({
+  loading,
+  sampleData,
+  syncing,
+  onSync
+}: ClaimWorkspaceProps) {
+  const [claims, setClaims] = useState<ClaimRecord[]>([blankClaim()]);
+  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sourceLabel, setSourceLabel] = useState("Manual entry");
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const seededRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!seededRef.current && sampleData?.realtime_claims.preview?.length) {
+      seededRef.current = true;
+      setClaims(sampleData.realtime_claims.preview);
+      setSourceLabel("Sample realtime claims");
+    }
+  }, [sampleData]);
+
+  const resetAssessment = () => {
+    setAnalysis(null);
+    setSyncMessage(null);
+  };
+
+  const replaceClaims = (nextClaims: ClaimRecord[], label: string) => {
+    setClaims(nextClaims);
+    setSourceLabel(label);
+    resetAssessment();
+  };
+
+  const updateClaim = (index: number, column: string, value: string) => {
+    setClaims((current) =>
+      current.map((claim, claimIndex) => (claimIndex === index ? { ...claim, [column]: value } : claim))
+    );
+    resetAssessment();
+  };
+
+  const submitClaims = async () => {
+    if (!claims.length) {
+      setError("Add at least one claim for assessment.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await analyzeClaims(claims);
+      setAnalysis(result);
+      window.setTimeout(() => {
+        const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        resultsRef.current?.scrollIntoView({
+          behavior: prefersReducedMotion ? "auto" : "smooth",
+          block: "start"
+        });
+      }, 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Claim assessment failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadCsv = async (file: File | null) => {
+    if (!file) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const parsedClaims = parseClaimsCsv(await file.text());
+      if (!parsedClaims.length) {
+        throw new Error("The CSV does not include claim rows.");
+      }
+      replaceClaims(parsedClaims, file.name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "CSV upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runSync = async () => {
+    setSyncError(null);
+    setSyncMessage(null);
+    try {
+      const result = await onSync();
+      setSyncMessage(`Synced ${formatDate(result.trained_at)}.`);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Engine sync failed.");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-t-4 border-t-info">
+        <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <CardTitle>New Claim Batch</CardTitle>
+            <p className="mt-1 text-sm text-muted">
+              {sourceLabel} - {claims.length} claim{claims.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={syncing || loading}
+              icon={
+                syncing ? (
+                  <ArrowsClockwise className="animate-spin" size={17} weight="bold" />
+                ) : (
+                  <ArrowsClockwise size={17} weight="bold" />
+                )
+              }
+              onClick={() => {
+                void runSync();
+              }}
+            >
+              {syncing ? "Syncing" : "Sync Engine"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              className="sr-only"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0] || null;
+                event.currentTarget.value = "";
+                void uploadCsv(file);
+              }}
+            />
+            <Button
+              variant="secondary"
+              disabled={busy}
+              icon={<UploadSimple size={17} weight="bold" />}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Upload CSV
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<Plus size={17} weight="bold" />}
+              onClick={() => replaceClaims([...claims, blankClaim()], sourceLabel)}
+            >
+              Add Claim
+            </Button>
+            <Button
+              disabled={busy || !claims.length}
+              icon={busy ? <ArrowsClockwise className="animate-spin" size={17} weight="bold" /> : <ClipboardText size={17} weight="bold" />}
+              onClick={submitClaims}
+            >
+              {busy ? "Processing" : "Proceed"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {error ? (
+            <p className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-danger">
+              <WarningCircle className="mt-0.5 shrink-0" size={17} weight="fill" aria-hidden="true" />
+              {error}
+            </p>
+          ) : null}
+          {syncError ? (
+            <p className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-danger">
+              <WarningCircle className="mt-0.5 shrink-0" size={17} weight="fill" aria-hidden="true" />
+              {syncError}
+            </p>
+          ) : null}
+          {syncMessage ? (
+            <p className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-success">
+              <CheckCircle className="mt-0.5 shrink-0" size={17} weight="fill" aria-hidden="true" />
+              {syncMessage}
+            </p>
+          ) : null}
+
+          <div className="overflow-x-auto">
+            <Table className="min-w-[3600px]">
+              <THead>
+                <TR>
+                  {editableColumns.map((column) => (
+                    <TH key={column}>{formatColumnLabel(column)}</TH>
+                  ))}
+                  <TH aria-label="Actions" />
+                </TR>
+              </THead>
+              <TBody>
+                {claims.map((claim, index) => (
+                  <TR key={`${claim.ClaimId}-${index}`}>
+                    {editableColumns.map((column) => (
+                      <TD key={column}>
+                        <Input
+                          aria-label={`${column} for claim ${index + 1}`}
+                          className={inputWidthForColumn(column)}
+                          value={String(claim[column] ?? "")}
+                          onChange={(event) => updateClaim(index, column, event.target.value)}
+                        />
+                      </TD>
+                    ))}
+                    <TD>
+                      <Button
+                        variant="ghost"
+                        aria-label="Remove claim"
+                        className="size-10 px-0 text-danger hover:bg-red-50"
+                        icon={<Trash size={17} weight="bold" />}
+                        onClick={() =>
+                          replaceClaims(
+                            claims.filter((_, claimIndex) => claimIndex !== index),
+                            sourceLabel
+                          )
+                        }
+                      />
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {analysis ? (
+        <div ref={resultsRef}>
+          <AssessmentResults analysis={analysis} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
+  return (
+    <div className="space-y-4">
+      <section className="rounded-lg border border-slate-950/20 bg-[#10151f] p-4 text-white shadow-panel">
+        <p className="text-sm font-semibold text-blue-200">Assessment Results</p>
+        <h2 className="mt-1 text-2xl font-semibold text-white">Investigation Summary</h2>
+        <p className="mt-1 text-sm text-slate-300">
+          Processed {analysis.count} claim{analysis.count === 1 ? "" : "s"} at{" "}
+          {formatDate(analysis.processed_at)}.
+        </p>
+      </section>
+
+      <div className="space-y-4">
+        {analysis.assessments.map((assessment) => (
+          <Card key={`${assessment.claim_id}-${assessment.line_number}`} className={`border-t-4 ${riskBorder(assessment.risk_level)}`}>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>
+                  Claim {assessment.claim_id} - Line {assessment.line_number}
+                </CardTitle>
+                <p className="mt-1 text-sm text-muted">
+                  {assessment.procedure_code} {assessment.procedure_name}
+                </p>
+              </div>
+              <RiskBadge level={assessment.risk_level} />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2 md:grid-cols-4">
+                <SummaryStat
+                  label="Risk Score"
+                  value={`${Math.round(assessment.final_risk_score * 100)}%`}
+                  icon={<Gauge size={19} weight="duotone" />}
+                  tone={assessment.risk_level === "High" ? "danger" : assessment.risk_level === "Medium" ? "warning" : "success"}
+                />
+                <SummaryStat
+                  label="Confidence Level"
+                  value={`${Math.round(assessment.confidence_level * 100)}%`}
+                  icon={<SealCheck size={19} weight="duotone" />}
+                  tone="info"
+                />
+                <SummaryStat
+                  label="Risk Indicators"
+                  value={assessment.rule_flag_count.toString()}
+                  icon={<ShieldWarning size={19} weight="duotone" />}
+                  tone={assessment.rule_flag_count > 0 ? "warning" : "success"}
+                />
+                <SummaryStat
+                  label="Review Pattern"
+                  value={assessment.predicted_pattern}
+                  icon={<Fingerprint size={19} weight="duotone" />}
+                  tone="accent"
+                />
+              </div>
+
+              <section className="rounded-lg border border-sky-200 bg-sky-50/80 p-4">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  <ClipboardText size={17} weight="duotone" aria-hidden="true" />
+                  Executive Summary
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-ink">{assessment.narrative.executive_summary}</p>
+              </section>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <ResultList title="Investigation Findings" items={assessment.narrative.investigation_findings} />
+                <ResultList title="Key Risk Indicators" items={assessment.narrative.key_risk_indicators} />
+                <ResultList title="Review Recommendations" items={assessment.narrative.recommended_review_actions} />
+              </div>
+
+              <section className="overflow-x-auto">
+                <Table className="min-w-[720px]">
+                  <THead>
+                    <TR>
+                      <TH>Indicator</TH>
+                      <TH>Severity</TH>
+                      <TH>Category</TH>
+                      <TH>Description</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {assessment.triggered_indicators.length ? (
+                      assessment.triggered_indicators.map((indicator) => (
+                        <TR key={indicator.rule_id}>
+                          <TD className="font-medium text-ink">{indicator.name}</TD>
+                          <TD>
+                            <RiskBadge level={indicator.severity} />
+                          </TD>
+                          <TD>{indicator.category}</TD>
+                          <TD className="text-muted">{indicator.description}</TD>
+                        </TR>
+                      ))
+                    ) : (
+                      <TR>
+                        <TD colSpan={4} className="text-muted">
+                          No rule-based indicators were triggered.
+                        </TD>
+                      </TR>
+                    )}
+                  </TBody>
+                </Table>
+              </section>
+
+              <section className="rounded-lg border border-line bg-slate-50/80 p-4">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  <Target size={17} weight="duotone" aria-hidden="true" />
+                  Detailed Claim Assessment
+                </h3>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Detail label="Provider" value={assessment.provider_npi} />
+                  <Detail label="Category" value={assessment.category} />
+                  <Detail label="Top Reason" value={assessment.top_reason} />
+                  <Detail label="Recommended Action" value={assessment.recommended_action} />
+                </dl>
+              </section>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  icon,
+  tone
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  tone: "success" | "warning" | "danger" | "info" | "accent";
+}) {
+  const toneStyles = {
+    success: "border-green-200 bg-green-50 text-success",
+    warning: "border-amber-200 bg-amber-50 text-warning",
+    danger: "border-red-200 bg-red-50 text-danger",
+    info: "border-sky-200 bg-sky-50 text-info",
+    accent: "border-teal-200 bg-teal-50 text-accent"
+  };
+
+  return (
+    <div className="min-h-24 rounded-lg border border-line bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-2">
+        <span className={`flex size-8 items-center justify-center rounded-lg border ${toneStyles[tone]}`} aria-hidden="true">
+          {icon}
+        </span>
+        <p className="text-sm text-muted">{label}</p>
+      </div>
+      <p className="mt-2 break-words text-lg font-semibold text-ink">{value}</p>
+    </div>
+  );
+}
+
+function ResultList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <section className="rounded-lg border border-line bg-white p-3 shadow-sm">
+      <h3 className="text-sm font-semibold text-ink">{title}</h3>
+      <ul className="mt-3 space-y-2 text-sm text-muted">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="flex gap-2 leading-6">
+            {title === "Key Risk Indicators" ? (
+              <WarningCircle className="mt-1 shrink-0 text-warning" size={14} weight="fill" aria-hidden="true" />
+            ) : title === "Review Recommendations" ? (
+              <ListChecks className="mt-1 shrink-0 text-action" size={14} weight="fill" aria-hidden="true" />
+            ) : (
+              <CheckCircle className="mt-1 shrink-0 text-success" size={14} weight="fill" aria-hidden="true" />
+            )}
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase text-muted">{label}</dt>
+      <dd className="mt-1 break-words text-sm text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function riskBorder(level: string) {
+  if (level === "High") return "border-t-danger";
+  if (level === "Medium") return "border-t-warning";
+  if (level === "Low") return "border-t-success";
+  return "border-t-info";
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString();
+}
+
+function formatColumnLabel(column: string) {
+  return column.replace(/_/g, " ");
+}
+
+function inputWidthForColumn(column: string) {
+  if (column === "LONG_DESCRIPTION" || column === "ProcedureName") return "min-w-72";
+  if (column === "ServiceDateFrom" || column === "ProviderNPI") return "min-w-40";
+  if (column.includes("Amt") || column === "ClaimLineTotalPaid") return "min-w-32";
+  return "min-w-28";
+}
+
+function parseClaimsCsv(text: string): ClaimRecord[] {
+  const rows = parseCsvRows(text);
+  if (rows.length < 2) return [];
+
+  const [headerRow, ...dataRows] = rows;
+  const headers = headerRow.map((header, index) => {
+    const normalized = header.replace(/^\uFEFF/, "").trim();
+    return normalized || `Column${index + 1}`;
+  });
+
+  return dataRows
+    .map((row, rowIndex) => {
+      const claim = headers.reduce((record, header, index) => {
+        record[header] = row[index]?.trim() ?? "";
+        return record;
+      }, {} as ClaimRecord);
+
+      if (!claim.ClaimId) {
+        claim.ClaimId = `CSV${String(rowIndex + 1).padStart(3, "0")}`;
+      }
+
+      return claim;
+    })
+    .filter((claim) => Object.values(claim).some((value) => String(value ?? "").trim() !== ""));
+}
+
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (char === "\"") {
+      if (inQuotes && text[index + 1] === "\"") {
+        cell += "\"";
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && text[index + 1] === "\n") {
+        index += 1;
+      }
+      row.push(cell);
+      if (row.some((value) => value.trim() !== "")) {
+        rows.push(row);
+      }
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  if (inQuotes) {
+    throw new Error("The CSV has an unmatched quote.");
+  }
+
+  row.push(cell);
+  if (row.some((value) => value.trim() !== "")) {
+    rows.push(row);
+  }
+
+  return rows;
+}

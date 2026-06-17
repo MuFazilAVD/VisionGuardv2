@@ -119,7 +119,7 @@ Persist artifacts and metrics
 ### Realtime Flow
 
 ```text
-Incoming JSON or CSV claims, one to five claims
+Incoming JSON or CSV claims
   |
   v
 Validate schema and type-normalize fields
@@ -286,4 +286,3 @@ Production:
 - LLM calls send claim assessment context to the configured LLM endpoint.
 - `OPENAI_API_KEY` and `OPENAI_MODEL` must be environment variables.
 - Missing LLM configuration does not block claim analysis because fallback narratives are always generated.
-

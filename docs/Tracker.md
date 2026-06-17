@@ -20,6 +20,11 @@
 - LLM narrative service implemented with deterministic fallback.
 - API endpoints implemented.
 - Frontend React/Vite application implemented.
+- Frontend simplified to one workspace with no left nav or dashboard.
+- Engine retraining reduced to a single sync button.
+- Claim upload, proceed action, and results now share one page with automatic scroll to newly rendered results.
+- Claim table now renders the full incoming claim schema and no longer requires a verification checkbox.
+- Realtime claim assessment no longer has an artificial five-claim batch cap.
 - Backend tests pass.
 - Frontend production build passes.
 - Local backend server verified at `http://localhost:8000`.

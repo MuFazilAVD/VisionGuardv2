@@ -21,13 +21,9 @@ frontend/
         card.tsx
         input.tsx
         table.tsx
-        tabs.tsx
         textarea.tsx
     pages/
-      Dashboard.tsx
-      Retraining.tsx
-      ClaimReview.tsx
-      Results.tsx
+      ClaimWorkspace.tsx
     services/
       api.ts
     types/
@@ -37,62 +33,56 @@ frontend/
     index.css
 ```
 
-## Routes and Views
+## Application Flow
 
-The app uses a simple in-app navigation model:
+The app is a single-page analyst workspace. It does not use a left navigation rail, dashboard view, separate results view, or secondary command header. `App.tsx` renders:
 
-- Dashboard
-- Retraining
-- Claim Review
-- Results
+- `Layout.tsx` for the compact brand header.
+- `ClaimWorkspace.tsx` for engine sync, claim data upload, submission, and results.
 
-## Dashboard
+## Shell
 
-Displays:
+The shell provides:
 
-- Training status.
-- Last refresh.
-- Dataset statistics.
-- Claim processing status.
+- Sticky top brand header.
+- No desktop left rail.
+- No mobile horizontal navigation.
 
-Business labels:
+## Engine Sync
 
-- "Assessment Engine"
-- "Historical Claims"
-- "Editable Rules"
-- "Recent Processing"
+Retraining is reduced to a single workflow button:
 
-## Retraining Screen
+- "Sync Engine" calls `POST /api/training/retrain`.
+- The workspace refreshes sample data after sync.
+- Sync feedback is shown inline only when the action completes or fails.
 
-Allows:
-
-- One-click retraining.
-- Progress status.
-- Metrics summary.
-
-Business labels:
-
-- "Refresh Assessment Engine"
-- "Validation Accuracy" may be shown as "Validation Quality".
-- "Training records" may be shown as "Historical records used".
-
-## Claim Review Screen
+## Claim Workspace
 
 Allows:
 
 - Upload CSV.
-- Load sample claims.
+- Load sample realtime claims on first app load.
+- Add or remove claim rows.
 - View claims.
 - Edit claims inline.
-- Submit for analysis.
+- Proceed to assessment.
+
+CSV upload behavior:
+
+- CSV files are parsed in the browser.
+- Uploaded rows populate the editable claim table.
+- Upload does not submit automatically.
+- Clicking "Proceed" submits the current table data.
 
 Required behavior:
 
-- Submit one to five claims.
+- Submit one or more claims.
+- Render the full incoming claim schema: `ClaimId`, `Gender`, `Age`, `ServiceDateFrom`, `PlaceOfService`, `LineNumber`, `ProcedureCode`, `ProcedureName`, `Modifier`, `Modifier2`, `Modifier3`, `Primary_Diagnosis_Pointer`, `Primary_Diagnosis`, `LONG_DESCRIPTION`, `ClaimLineTotalPaid`, `AmtCharged`, `AllowedUnits`, `AmtDisallowed`, `AmtEligible`, `AmtCopay`, `AmtCoinsurance`, `AmtDeductible`, `ProviderNPI`, `GroupId`, `GroupNumber`, `LOB`, `CoverageCode`, and `State`.
 - Keep financial fields editable.
 - Keep procedure, diagnosis, and modifier fields editable.
+- Clear stale assessment results whenever the claim data changes.
 
-## Results Screen
+## Results
 
 Displays:
 
@@ -102,6 +92,8 @@ Displays:
 - Triggered Indicators.
 - Review Recommendations.
 - Detailed Claim Assessment.
+
+Results render below the claim table on the same page. After "Proceed" completes, the frontend scrolls to the newly rendered results region.
 
 Visible language avoids:
 
@@ -125,9 +117,9 @@ Preferred language:
 
 The POC uses React component state:
 
-- Training status is fetched on app load and after retraining.
-- Claim rows are stored in the Claim Review page.
-- Analysis results are stored at the app level so the Results screen can render the latest assessment.
+- Sample data is fetched on app load and after engine sync.
+- Claim rows are stored in `ClaimWorkspace.tsx`.
+- Analysis results are stored in `ClaimWorkspace.tsx` and rendered below the claim table.
 
 This is sufficient for the POC. A later production build could add React Query or a centralized store if workflows become larger.
 
@@ -143,4 +135,3 @@ Default behavior:
 
 - Development: `http://localhost:8000`
 - Production: `https://d2brdeqy144bwg.cloudfront.net`
-

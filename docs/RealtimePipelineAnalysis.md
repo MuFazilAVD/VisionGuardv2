@@ -21,7 +21,7 @@ Notebook behavior:
 Modern replacement:
 
 - Accept CSV upload or JSON payload through `POST /api/claims/analyze`.
-- Restrict request size to one to five claims.
+- Accept one or more claims in a request.
 - Use the same canonical schema as `realtime_claims.csv`.
 
 ## Realtime Step 2: Normalize Types
@@ -267,4 +267,3 @@ The embedded notebook output shows three sample claims:
 - `RT003`: invalid non-vision code, Low risk, final score about 0.488.
 
 Exact scores will differ in the POC because the unavailable historical training dataset must be regenerated.
-

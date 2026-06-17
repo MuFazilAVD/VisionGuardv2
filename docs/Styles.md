@@ -6,16 +6,16 @@ The application is for claims analysts, investigators, and business stakeholders
 
 ## Visual Direction
 
-- Quiet operational dashboard style.
+- Quiet operational workspace style.
 - Modern claims operations cockpit: compact, high-contrast, precise, and confidence-building.
 - Dense but readable information with clear scan paths for analyst workflows.
-- Prefer a left-rail console shell on desktop, with compact top context and horizontal navigation on mobile.
+- Use a compact top shell with no left navigation rail and no secondary page navigation.
 - No oversized marketing hero sections.
 - No decorative gradient orbs or purely atmospheric backgrounds.
-- Cards only for discrete dashboard metrics, repeated result items, and framed forms.
+- Cards only for repeated result items and framed forms.
 - No cards inside cards.
 - Surfaces should feel layered and premium: use restrained borders, small shadows, semantic top bars, dark command bands, and compact headings.
-- Avoid large blank white regions. Keep pages task-dense, with 12px to 16px gaps for operational views.
+- Avoid large blank white regions. Keep the workspace task-dense, with 12px to 16px gaps for operational sections.
 
 ## Color
 
@@ -24,8 +24,8 @@ The palette should avoid being dominated by a single hue. Color is semantic firs
 - Neutral background: near-white canvas for sustained analyst use.
 - Ink: dark neutral text for primary content.
 - Slate: borders, table structure, and muted supporting text.
-- Charcoal: desktop navigation rail, command bands, and table headers only. Use sparingly so the UI feels modern without becoming a dark theme.
-- Blue: primary actions, selected navigation, and informational emphasis.
+- Charcoal: command bands and table headers only. Use sparingly so the UI feels modern without becoming a dark theme.
+- Blue: primary actions and informational emphasis.
 - Sky: secondary information such as confidence and count metadata.
 - Teal: stable data/evidence assets and supporting operational context.
 - Green: success, ready states, completed refreshes, and low risk.
@@ -60,15 +60,14 @@ The palette should avoid being dominated by a single hue. Color is semantic firs
 ## Components
 
 - Buttons include icons when the action is common and recognizable.
-- Upload, refresh, submit, delete, readiness, and navigation actions use Phosphor icons.
-- Phosphor weights should communicate priority: regular for navigation, bold/fill for direct actions and alerts, duotone for status tiles.
+- Upload, sync, submit, delete, readiness, and assessment actions use Phosphor icons.
+- Phosphor weights should communicate priority: bold/fill for direct actions and alerts, duotone for status tiles.
 - Badges communicate risk level and status.
 - Risk badges pair color, text, and icon so color is never the only cue.
 - Tables are used for claim review and result details, with dark headers for stronger scanning and compact body rows.
 - Textareas are used for longer editable claim descriptions.
-- Metric cards use compact icon containers with semantic color and enough contrast to distinguish status at a glance.
 - File upload must be triggered from a keyboard reachable button, not only a styled label.
-- Command bands anchor each major workflow and contain the primary action cluster for that page.
+- The workspace should begin with the claim data form, not a secondary command header or right-side status rail.
 
 ## Accessibility
 

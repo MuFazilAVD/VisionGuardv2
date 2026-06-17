@@ -34,6 +34,54 @@ class RuleDefinition:
     realtime_supported: bool
 
 
+@dataclass(frozen=True)
+class BusinessRuleDefinition:
+    section: str
+    item: str
+    analysis: str
+    risk_level: str
+    operational_definition: str
+    routine: str = ""
+    medical: str = ""
+    both: str = ""
+    frequency: str = ""
+
+
+@dataclass(frozen=True)
+class BusinessRuleImplementation:
+    rule_ids: tuple[str, ...]
+    notes: str
+
+
+def _indicator_marker(value: str) -> str:
+    return "x" if value.strip().lower() == "x" else ""
+
+
+def _business_rule(
+    section: str,
+    item: str,
+    analysis: str,
+    risk_level: str,
+    operational_definition: str,
+    *,
+    routine: str = "",
+    medical: str = "",
+    both: str = "",
+    frequency: str = "",
+) -> BusinessRuleDefinition:
+    return BusinessRuleDefinition(
+        section=section,
+        item=item,
+        analysis=analysis,
+        risk_level=risk_level,
+        operational_definition=operational_definition.strip(),
+        routine=_indicator_marker(routine),
+        medical=_indicator_marker(medical),
+        both=_indicator_marker(both),
+        frequency=_indicator_marker(frequency),
+    )
+
+
 RULE_DEFINITIONS = [
     RuleDefinition(
         "R006",
@@ -168,8 +216,138 @@ RULE_DEFINITIONS = [
 ]
 
 RULES_BY_COLUMN = {rule.column: rule for rule in RULE_DEFINITIONS}
+RULES_BY_ID = {rule.rule_id: rule for rule in RULE_DEFINITIONS}
 HISTORICAL_RULE_COLUMNS = [rule.column for rule in RULE_DEFINITIONS]
 REALTIME_RULE_COLUMNS = [rule.column for rule in RULE_DEFINITIONS if rule.realtime_supported]
+
+BUSINESS_RULE_DEFINITIONS = [
+    _business_rule('Operational Rules', '1', 'Coding Violations / Unbundling', '2', 'Review of CMS Correct Coding Edits, Peer-to-Peer  (PTP) and Medically Unlikely Edits (MUE)', medical='x'),
+    _business_rule('Operational Rules', '2', 'Modifier Abuse FWA Pattern', '3', 'Bilateral Reimbursement for Status 1 Codes', medical='x'),
+    _business_rule('Operational Rules', '3', 'Unbundling/ FWA Pattern', '1', 'Bilateral procedures submitted twice CPT codes with bilateral indicator = 2', medical='x'),
+    _business_rule('Operational Rules', '4', 'FWA Pattern', '1', 'Exam Double Billing combination of Optometric Exam (92002, 92012, 92004, 92014, S0620, S0621) same day as E and M (CPT 99201 to 99215)', both='x'),
+    _business_rule('Operational Rules', '5', 'FWA Pattern', '2', 'CPT Rule Violation, exam following a Comp. Exam CPT 92004/ 92014 followed by CPT (S0620, S0621, 92002, or 92012) or DX H52 or Z010 1 to 5 days following', medical='x'),
+    _business_rule('Operational Rules', '6', 'Modifier Abuse FWA Pattern', '2', 'Exams same day Global Surgery Periods with or without modifiers', both='x'),
+    _business_rule('Operational Rules', '7', 'Modifier Abuse FWA Pattern', '2', 'Exams during Global Surgery Periods', medical='x'),
+    _business_rule('Operational Rules', '8', 'FWA Pattern', '1', 'Duplicate Claims Search', both='x'),
+    _business_rule('Operational Rules', '9', 'Unbundling of Exam', '2', 'Routine Exam (S0620/ S0621) same day as refraction (92015), refraction is included', medical='x'),
+    _business_rule('Operational Rules', '10', 'FWA Pattern', '2', 'Outlier review statistical review of provider services to the network', both='x'),
+    _business_rule('Operational Rules', '11', 'FWA Pattern', '2', 'Outlier review statistical review of provider exams with and without additional services to the network', both='x'),
+    _business_rule('Operational Rules', '12', 'Overutilization', '3', 'Frequency  medical optometry procedures to exam frequencies', both='x'),
+    _business_rule('Operational Rules', '13', 'Unbundling of Exam', '3', "Tonometry Service (CPT 92100) same day as an exam, inclusive unless the provider performs the service 3X's", medical='x'),
+    _business_rule('Operational Rules', '14', 'Unbundling of Exam', '2', 'Sensory Motor Exams (CPT 92060), inclusive to an exam unless there are clear and specific circumstances to document separately', medical='x'),
+    _business_rule('Operational Rules', '15', 'Unbundling of Exam', '2', 'Fundus Photos (92250) and exam frequencies with routine DXs or new patient exams', medical='x'),
+    _business_rule('Operational Rules', '16', 'Unbundling of Exam', '1', "Extended Visual Field Exams (CPT's 92081, 92082, or 92083) inclusive to an exam unless there are clear and specific circumstances to document separately", medical='x'),
+    _business_rule('Operational Rules', '17', 'Unbundling of Exam', '2', "Gonioscopy (CPT's 92020) review to document separately as a separate procedure", medical='x'),
+    _business_rule('Operational Rules', '18', 'FWA Pattern', '1', 'Services submitted with unspecified or other visual disturbances diagnosis codes', medical='x'),
+    _business_rule('Operational Rules', '19', 'FWA Pattern', '3', 'Level 5 Evaluation and Management Exams (CPT 99205, 99215)', both='x'),
+    _business_rule('Operational Rules', '20', 'FWA Pattern', '3', 'Excessive charges for Medically Necessary contacts', both='x'),
+    _business_rule('Operational Rules', '21', 'FWA Pattern', '1', 'Opticians submitting exams', routine='x'),
+    _business_rule('Operational Rules', '22', 'Coding Violation/ FWA Pattern', '2', 'New Patient for Established Patient exams within 3 years of first new pt exam', both='x'),
+    _business_rule('Operational Rules', '23', 'Coding Violation/ FWA Pattern', '3', 'Vision Therapy (CPT 92065) and exams same day', medical='x'),
+    _business_rule('Operational Rules', '24', 'FWA Pattern', '3', 'Vision Therapy Review (92065) and more than 1 units of service per day', medical='x'),
+    _business_rule('Operational Rules', '25', 'FWA Pattern', '3', "Vision Therapy Review (92065) and/ or Rehabilitation Services (CPT 97's)", medical='x'),
+    _business_rule('Operational Rules', '26', 'FWA Pattern', '2', 'Location of service reviews', both='x'),
+    _business_rule('Operational Rules', '27', 'FWA Pattern', '3', 'Frequency of contact lens evaluations (CPT 92310) on the same day as eye exam', medical='x'),
+    _business_rule('Operational Rules', '28', 'FWA Potential', '2', 'Submitting the same service under more than one policy (Same member with 2 distinct policies)', both='x'),
+    _business_rule('Operational Rules', '29', 'FWA Potential Materials', '2', 'Materials dispensed without exams, potential services not rendered', routine='x'),
+    _business_rule('Operational Rules', '30', 'FWA Potential Materials', '3', 'Family Orders, review for member abuse', routine='x'),
+    _business_rule('Operational Rules', '31', 'FWA Pattern', '3', 'Material orders for patients without an exam in the calendar year', routine='x'),
+    _business_rule('Operational Rules', '32', 'FWA Pattern', '2', 'Services provided related to open angle glaucoma diagnosis billing', medical='x'),
+    _business_rule('Operational Rules', '33', 'FWA Pattern', '2', 'Repair Replace same day as new order', both='x'),
+    _business_rule('Operational Rules', '34', 'FWA Pattern', '3', 'Providers services to patients <> in geographic area', both='x'),
+    _business_rule('Operational Rules', '35', 'FWA Pattern', '2', 'Providers submitting services from multiple offices on the same day', both='x'),
+    _business_rule('Operational Rules', '36', 'Fraud', '1', 'Charging members for RXs', routine='x'),
+    _business_rule('Operational Rules', '37', 'FWA Pattern', '2', 'Provider utilization of routine vision diagnosis vs medical diagnosis codes', both='x'),
+    _business_rule('Operational Rules', '38', 'Modifier Abuse FWA Pattern', '2', 'Exams and Medical Optometry procedures with modifier 59 (Docs vs. Techs)', medical='x'),
+    _business_rule('Operational Rules', '39', 'Abuse Pattern', '2', 'Exams with modifier 25 for the same service (Drug Treatments) on multiple visits', medical='x'),
+    _business_rule('Operational Rules', '40', 'FWA Internal', '3', 'Member and out of network payments (Direct Service Adjustments)'),
+    _business_rule('Operational Rules', '41', 'FWA Potential Materials', '2', 'Materials: Practitioner Private Sale and submits claims', routine='x'),
+    _business_rule('Operational Rules', '42', 'FWA Potential Materials', '2', 'Billing Sunglasses when not available as a member benefit V2020 with V2744', routine='x'),
+    _business_rule('Operational Rules', '43', 'FWA Potential Materials', '2', 'Frequency of Repair and Replace, review for member or provider abuse', routine='x'),
+    _business_rule('Operational Rules', '44', 'FWA Potential Materials', '3', 'Providers billing on same day over multiple years', routine='x'),
+    _business_rule('Operational Rules', '45', 'FWA Pattern Surgery', '3', 'Eye lash removal (CPT 67820) splitting individual eye services after the 10 day rule', medical='x'),
+    _business_rule('Operational Rules', '46', 'FWA Pattern Surgery', '3', 'Punctal Plugs (CPT 68761) splitting individual eye services after the 10 day rule', medical='x'),
+    _business_rule('Operational Rules', '47', 'FWA Pattern Surgery', '3', 'Surgery; Cataract Surgery with additional procedures (MIG)', medical='x'),
+    _business_rule('Operational Rules', '48', 'FWA Pattern Surgery', '3', 'Surgery; Cataract Surgery, Major CPT (66982) v Minor (66984), Simple v Extensive', medical='x'),
+    _business_rule('Operational Rules', '49', 'FWA Pattern Surgery', '3', 'Surgery sessions (61793,66762,67109,67141,67145,67208,67210,67218,67220,67229,G0185,G0186,G0187,G0251,G0340,G0424)', medical='x'),
+    _business_rule('Operational Rules', '50', 'FWA Pattern Surgery', '3', 'Surgery; Frequency of multiple YAG laser sessions (CPT 66821)', medical='x'),
+    _business_rule('Operational Rules', '51', 'FWA Pattern Surgery', '3', 'Surgery: Injections with no Jcodes (11900, 64612) potential cosmetic injections (Collagen, Botox)', medical='x'),
+    _business_rule('Operational Rules', '52', 'FWA Pattern Surgery', '3', 'Surgery; Multiple Stage billing (CPT 66802,66821,66840,66915,66982,66983,66984,67031,67102,67103,67104,67106,67113,67971,67973,67974,67975)', medical='x'),
+    _business_rule('Operational Rules', '53', 'FWA Pattern Drugs', '3', 'Drugs, High Cost and Frequency of treatments (CPT J0178, J2778, J9035, J2503)', medical='x'),
+    _business_rule('Operational Rules', '54', 'FWA Pattern Drugs', '3', "Drugs; Botox (CPT 64612 & C9018, C9278, J0585, J0586, J0587, J0588, J0860, J1155, Q2040) for non-spasm related DX's", medical='x'),
+    _business_rule('Operational Rules', '55', 'FWA Pattern Labs', '3', 'Labs; (CPT 83861 & CLIA Waiver) or Tear Analysis', medical='x'),
+    _business_rule('Operational Rules', '56', 'FWA Pattern Surgery', '3', 'Surgery: Trichiasis (67825) cosmetic vs. medically necessary', medical='x'),
+    _business_rule('Operational Rules', '57', 'FWA Pattern Surgery', '3', 'Surgery: Blepharoplasty (15823, 67904) cosmetic vs. medically necessary', medical='x'),
+    _business_rule('Operational Rules', '58', 'Upcoding Materials', '3', 'Material Upcoding, Polycarb (V2763/ 4)', both='x'),
+    _business_rule('Operational Rules', '59', 'Upcoding Materials', '3', 'Material Upcoding, V2700 thru V2799 compared to population', both='x'),
+    _business_rule('Operational Rules', '60', 'Upcoding Materials', '3', 'Material Upcoding, Single (V21X) vs Bifocal (V22X) vs Trifocal (V23X)', routine='x'),
+    _business_rule('Operational Rules', '61', 'FWA Potential', '3', 'Blind Services (ICD-10 H54.*)', medical='x'),
+    _business_rule('Operational Rules', '62', 'FWA Potential', '3', 'Lasik then glasses or contacts', both='x'),
+    _business_rule('Operational Rules', '63', 'FWA Potential', '3', 'Out of Network reimbursement to In Network Providers', both='x'),
+    _business_rule('Operational Rules', '64', 'FWA Potential', '3', 'Age related Diagnosis review', medical='x'),
+    _business_rule('Operational Rules', '65', 'FWA Potential', '3', 'Standard vs Oversize frame (V2020 v V2025)', routine='x', medical='x'),
+    _business_rule('Shared Client Risks', '1', 'FWA Potential', '1', 'Exam Double Billing, exams services submitted to both Versant Health and Medical plans for the same patient on the same day'),
+    _business_rule('Shared Client Risks', '3', 'FWA Potential', '1', 'Contracted versant Health providers submitting routine services to Medical'),
+    _business_rule('Shared Client Risks', '2', 'FWA Potential', '1', 'Refractions billed to Medical plans for Versant Health Routine Exams'),
+    _business_rule('Shared Client Risks', '4', 'FWA Potential', '2', 'Review of Medical Plan services to Versant analytics'),
+    _business_rule('Shared Client Risks', '5', 'FWA Potential', '2', 'Exams provided during Global Surgery Periods'),
+    _business_rule('Shared Client Risks', '6', 'FWA Potential', '2', 'Surgeries, Major v Minor, Simple v Extensive'),
+    _business_rule('Special', 'CMS', 'CMS', '', 'Multiple Payment Reduction (MPR)'),
+    _business_rule('Special', 'CMS', 'CMS', '', 'Telehealth'),
+    _business_rule('Special', 'CMS', 'CMS', '', 'Pandemic Billing'),
+    _business_rule('Special', 'CMS', 'CMS', '', 'PPE'),
+]
+
+_BUSINESS_RULE_IMPLEMENTATIONS = {
+    ("Operational Rules", "1"): BusinessRuleImplementation(
+        ("R102",),
+        "POC checks configured same-day CCI conflict pairs; full PTP and MUE edit tables are not loaded.",
+    ),
+    ("Operational Rules", "2"): BusinessRuleImplementation(
+        ("R103",),
+        "POC flags bilateral, left, and right modifiers; CMS status indicator data is not loaded.",
+    ),
+    ("Operational Rules", "3"): BusinessRuleImplementation(
+        ("R103",),
+        "POC flags bilateral, left, and right modifiers; bilateral indicator 2 requires CMS fee schedule data.",
+    ),
+    ("Operational Rules", "4"): BusinessRuleImplementation(
+        ("R100",),
+        "POC flags multiple exam codes on the same claim service day; E/M pairing is catalog-only.",
+    ),
+    ("Operational Rules", "5"): BusinessRuleImplementation(
+        ("R101",),
+        "POC flags comprehensive and routine exams on the same claim service day; the 1-5 day lookback needs member history.",
+    ),
+    ("Operational Rules", "10"): BusinessRuleImplementation(
+        ("R013", "R014", "R015", "R016"),
+        "Historical POC provider outlier flags cover exam volume, material volume, average billed amount, and add-on usage.",
+    ),
+    ("Operational Rules", "11"): BusinessRuleImplementation(
+        ("R013",),
+        "Historical POC flags provider exam volume at or above the 99th percentile.",
+    ),
+    ("Operational Rules", "12"): BusinessRuleImplementation(
+        ("R013",),
+        "Historical POC provider exam volume is a frequency proxy until medical optometry procedure families are modeled.",
+    ),
+    ("Operational Rules", "20"): BusinessRuleImplementation(
+        ("R007",),
+        "POC uses billed-to-allowed ratio greater than 2.0 as the current excessive-charge signal.",
+    ),
+    ("Operational Rules", "24"): BusinessRuleImplementation(
+        ("R008",),
+        "POC flags allowed units greater than 1 on exam codes; the 92065-specific unit rule remains catalog-only.",
+    ),
+    ("Operational Rules", "38"): BusinessRuleImplementation(
+        ("R006",),
+        "POC flags modifier 59 on vision exam or material procedure codes.",
+    ),
+    ("Shared Client Risks", "1"): BusinessRuleImplementation(
+        ("R100",),
+        "POC flags duplicate exam combinations within current claim-day data; cross-plan matching requires medical plan feeds.",
+    ),
+}
 
 
 CANONICAL_CLAIM_COLUMNS = [
@@ -383,7 +561,52 @@ def _apply_provider_rules(result: pd.DataFrame, procedure: pd.Series, charged: p
     return result
 
 
+def _business_rule_realtime_status(rule_ids: tuple[str, ...]) -> str:
+    if not rule_ids:
+        return ""
+
+    statuses = {RULES_BY_ID[rule_id].realtime_supported for rule_id in rule_ids}
+    if statuses == {True}:
+        return "Yes"
+    if statuses == {False}:
+        return "No"
+    return "Mixed"
+
+
 def rule_definitions_for_workbook() -> list[dict[str, str]]:
+    rows = []
+    catalog_only_note = (
+        "Cataloged from business rules; deterministic implementation requires additional source data "
+        "or adjudication context."
+    )
+    for business_rule in BUSINESS_RULE_DEFINITIONS:
+        implementation = _BUSINESS_RULE_IMPLEMENTATIONS.get(
+            (business_rule.section, business_rule.item),
+            BusinessRuleImplementation((), catalog_only_note),
+        )
+        rule_ids = implementation.rule_ids
+        rows.append(
+            {
+                "Section": business_rule.section,
+                "Item": business_rule.item,
+                "Analysis": business_rule.analysis,
+                "Risk Level": business_rule.risk_level,
+                "Operational Definition": business_rule.operational_definition,
+                "Routine": business_rule.routine,
+                "Medical": business_rule.medical,
+                "Both": business_rule.both,
+                "Frequency": business_rule.frequency,
+                "Implementation Status": "Executable" if rule_ids else "Catalog Only",
+                "Executable Rule Ids": ", ".join(rule_ids),
+                "Executable Flag Columns": ", ".join(RULES_BY_ID[rule_id].column for rule_id in rule_ids),
+                "Realtime Supported": _business_rule_realtime_status(rule_ids),
+                "Implementation Notes": implementation.notes,
+            }
+        )
+    return rows
+
+
+def executable_rule_definitions_for_workbook() -> list[dict[str, str]]:
     return [
         {
             "Rule Id": rule.rule_id,
@@ -392,6 +615,7 @@ def rule_definitions_for_workbook() -> list[dict[str, str]]:
             "Trigger Logic": rule.trigger_logic,
             "Severity": rule.severity,
             "Category": rule.category,
+            "Realtime Supported": "Yes" if rule.realtime_supported else "No",
         }
         for rule in RULE_DEFINITIONS
     ]

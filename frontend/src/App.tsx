@@ -1,61 +1,45 @@
 import { useEffect, useState } from "react";
 
-import { Layout, type ViewName } from "./components/Layout";
-import Dashboard from "./pages/Dashboard";
-import ClaimReview from "./pages/ClaimReview";
-import Results from "./pages/Results";
-import Retraining from "./pages/Retraining";
-import { getSampleData, getTrainingStatus } from "./services/api";
-import type { AnalyzeResponse, SampleDataResponse, TrainingStatus } from "./types/api";
+import { Layout } from "./components/Layout";
+import ClaimWorkspace from "./pages/ClaimWorkspace";
+import { getSampleData, retrainAssessmentEngine } from "./services/api";
+import type { SampleDataResponse, TrainingResponse } from "./types/api";
 
 export default function App() {
-  const [activeView, setActiveView] = useState<ViewName>("dashboard");
-  const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
   const [sampleData, setSampleData] = useState<SampleDataResponse | null>(null);
-  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
-  const refreshStatus = async () => {
-    const [status, samples] = await Promise.all([getTrainingStatus(), getSampleData()]);
-    setTrainingStatus(status);
+  const refreshSamples = async () => {
+    const samples = await getSampleData();
     setSampleData(samples);
   };
 
+  const syncEngine = async (): Promise<TrainingResponse> => {
+    setSyncing(true);
+    try {
+      const response = await retrainAssessmentEngine();
+      await refreshSamples();
+      return response;
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   useEffect(() => {
-    refreshStatus()
+    refreshSamples()
       .catch(() => undefined)
       .finally(() => setLoading(false));
   }, []);
 
   return (
-    <Layout activeView={activeView} onChangeView={setActiveView}>
-      {activeView === "dashboard" ? (
-        <Dashboard
-          loading={loading}
-          sampleData={sampleData}
-          trainingStatus={trainingStatus}
-          onNavigate={setActiveView}
-        />
-      ) : null}
-      {activeView === "retraining" ? (
-        <Retraining
-          trainingStatus={trainingStatus}
-          onRefresh={async () => {
-            await refreshStatus();
-          }}
-        />
-      ) : null}
-      {activeView === "review" ? (
-        <ClaimReview
-          sampleData={sampleData}
-          onAnalysis={(result) => {
-            setAnalysis(result);
-            setActiveView("results");
-          }}
-        />
-      ) : null}
-      {activeView === "results" ? <Results analysis={analysis} onNavigate={setActiveView} /> : null}
+    <Layout>
+      <ClaimWorkspace
+        loading={loading}
+        sampleData={sampleData}
+        syncing={syncing}
+        onSync={syncEngine}
+      />
     </Layout>
   );
 }
-

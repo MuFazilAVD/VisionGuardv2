@@ -6,7 +6,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.pipelines.rules_engine import CANONICAL_CLAIM_COLUMNS, rule_definitions_for_workbook
+from app.pipelines.rules_engine import (
+    CANONICAL_CLAIM_COLUMNS,
+    executable_rule_definitions_for_workbook,
+    rule_definitions_for_workbook,
+)
 from app.repositories.data_repository import DataRepository
 from app.utils.paths import HISTORICAL_CLAIMS_PATH, ROOT_REALTIME_CLAIMS, RULES_XLSX_PATH, ensure_directories
 
@@ -71,7 +75,10 @@ class SampleDataService:
 
     def generate_rules_workbook(self) -> None:
         rules_df = pd.DataFrame(rule_definitions_for_workbook())
-        rules_df.to_excel(RULES_XLSX_PATH, index=False)
+        executable_rules_df = pd.DataFrame(executable_rule_definitions_for_workbook())
+        with pd.ExcelWriter(RULES_XLSX_PATH, engine="openpyxl") as writer:
+            rules_df.to_excel(writer, index=False, sheet_name="Business Rules")
+            executable_rules_df.to_excel(writer, index=False, sheet_name="Executable Rules")
 
     def generate_historical_claims(self, record_count: int = 8000) -> None:
         rng = np.random.default_rng(42)
