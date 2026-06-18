@@ -2,6 +2,7 @@ import {
   ArrowsClockwise,
   CaretDown,
   CaretUp,
+  ChartLineUp,
   CheckCircle,
   ClipboardText,
   Fingerprint,
@@ -71,13 +72,13 @@ type ClaimWorkspaceProps = {
   onSync: () => Promise<TrainingResponse>;
 };
 
-function blankClaim(): ClaimRecord {
+function blankClaim(existingClaims: ClaimRecord[]): ClaimRecord {
   return {
-    ClaimId: `NEW${Date.now().toString().slice(-5)}`,
-    MemberId: "",
+    ClaimId: nextIdentifier(existingClaims, "ClaimId", "RT"),
+    MemberId: nextIdentifier(existingClaims, "MemberId", "MEM"),
     Gender: "U",
     Age: 40,
-    ServiceDateFrom: "2024-06-01",
+    ServiceDateFrom: nextServiceDate(existingClaims),
     PlaceOfService: "11",
     LineNumber: 1,
     ProcedureCode: "92014",
@@ -103,6 +104,107 @@ function blankClaim(): ClaimRecord {
     CoverageCode: "PPO",
     State: "OH"
   };
+}
+
+function nextIdentifier(
+  existingClaims: ClaimRecord[],
+  field: "ClaimId" | "MemberId",
+  fallbackPrefix: string
+) {
+  const sequences = new Map<
+    string,
+    { prefix: string; width: number; values: number[]; occurrences: number; lastIndex: number }
+  >();
+
+  existingClaims.forEach((claim, index) => {
+    const value = String(claim[field] ?? "").trim();
+    const match = value.match(/^(.*?)(\d+)$/);
+    if (!match) return;
+
+    const prefix = match[1];
+    const numericPart = match[2];
+    const key = `${prefix}\u0000${numericPart.length}`;
+    const sequence = sequences.get(key) ?? {
+      prefix,
+      width: numericPart.length,
+      values: [],
+      occurrences: 0,
+      lastIndex: index
+    };
+
+    sequence.values.push(Number(numericPart));
+    sequence.occurrences += 1;
+    sequence.lastIndex = index;
+    sequences.set(key, sequence);
+  });
+
+  const preferredSequence = [...sequences.values()].sort(
+    (left, right) => right.occurrences - left.occurrences || right.lastIndex - left.lastIndex
+  )[0];
+
+  if (!preferredSequence) {
+    return `${fallbackPrefix}${String(existingClaims.length + 1).padStart(3, "0")}`;
+  }
+
+  const nextValue = Math.max(...preferredSequence.values) + 1;
+  return `${preferredSequence.prefix}${String(nextValue).padStart(preferredSequence.width, "0")}`;
+}
+
+function nextServiceDate(existingClaims: ClaimRecord[]) {
+  const parsedDates = existingClaims
+    .map((claim) => parseClaimDate(String(claim.ServiceDateFrom ?? "").trim()))
+    .filter((date): date is ParsedClaimDate => date !== null);
+
+  const usDateCount = parsedDates.filter((date) => date.style === "us").length;
+  const isoDateCount = parsedDates.filter((date) => date.style === "iso").length;
+  const preferredStyle: ParsedClaimDate["style"] = isoDateCount > usDateCount ? "iso" : "us";
+  const sourceDate = parsedDates[parsedDates.length - 1];
+
+  if (sourceDate) {
+    return formatClaimDate(sourceDate, preferredStyle);
+  }
+
+  const today = new Date();
+  return `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`;
+}
+
+type ParsedClaimDate = {
+  year: number;
+  month: number;
+  day: number;
+  style: "us" | "iso";
+};
+
+function parseClaimDate(value: string): ParsedClaimDate | null {
+  const usMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (usMatch) {
+    return {
+      year: Number(usMatch[3]),
+      month: Number(usMatch[1]),
+      day: Number(usMatch[2]),
+      style: "us"
+    };
+  }
+
+  const isoMatch = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    return {
+      year: Number(isoMatch[1]),
+      month: Number(isoMatch[2]),
+      day: Number(isoMatch[3]),
+      style: "iso"
+    };
+  }
+
+  return null;
+}
+
+function formatClaimDate(date: ParsedClaimDate, style: ParsedClaimDate["style"]) {
+  if (style === "iso") {
+    return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
+  }
+
+  return `${date.month}/${date.day}/${date.year}`;
 }
 
 export default function ClaimWorkspace({
@@ -254,7 +356,7 @@ export default function ClaimWorkspace({
               variant="secondary"
               disabled={loading}
               icon={<Plus size={17} weight="bold" />}
-              onClick={() => replaceClaims([...claims, blankClaim()], sourceLabel)}
+              onClick={() => replaceClaims([...claims, blankClaim(claims)], sourceLabel)}
             >
               Add Claim
             </Button>
@@ -416,7 +518,7 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
               </CardHeader>
               {!isCollapsed ? (
                 <CardContent id={contentId} className="space-y-4">
-                  <div className="grid gap-2 md:grid-cols-4">
+                  <div className="grid gap-2 md:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.4fr)]">
                     <SummaryStat
                       label="Risk Score"
                       value={`${Math.round(assessment.final_risk_score * 100)}%`}
@@ -424,20 +526,33 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
                       tone={assessment.risk_level === "High" ? "danger" : assessment.risk_level === "Medium" ? "warning" : "success"}
                     />
                     <SummaryStat
-                      label="Confidence Level"
-                      value={`${Math.round(assessment.confidence_level * 100)}%`}
-                      icon={<SealCheck size={19} weight="duotone" />}
-                      tone="info"
+                      label="Payment Deviation"
+                      value={`${Math.round(assessment.unexpected_pattern_score * 100)}%`}
+                      // detail="Deviation from expected mean (30% risk-score weight)"
+                      icon={<ChartLineUp size={19} weight="duotone" />}
+                      tone="warning"
                     />
                     <SummaryStat
-                      label="Risk Indicators"
+                      label="Rules Triggered"
                       value={assessment.rule_flag_count.toString()}
                       icon={<ShieldWarning size={19} weight="duotone" />}
                       tone={assessment.rule_flag_count > 0 ? "warning" : "success"}
                     />
                     <SummaryStat
                       label="Review Pattern"
-                      value={assessment.predicted_pattern}
+                      value={
+                        <div className="flex min-w-0 items-center justify-between gap-4">
+                          <span className="min-w-0 truncate">{assessment.predicted_pattern}</span>
+                          <span
+                            className="flex shrink-0 items-center gap-1.5 border-l border-slate-200 pl-4 text-base text-info"
+                            aria-label={`Pattern confidence: ${Math.round(assessment.confidence_level * 100)}%`}
+                            title="Pattern confidence"
+                          >
+                            <SealCheck size={18} weight="duotone" aria-hidden="true" />
+                            {Math.round(assessment.confidence_level * 100)}%
+                          </span>
+                        </div>
+                      }
                       icon={<Fingerprint size={19} weight="duotone" />}
                       tone="accent"
                     />
@@ -490,7 +605,7 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
                     </Table>
                   </section>
 
-                  <section className="rounded-lg border border-line bg-slate-50/80 p-4">
+                  {/* <section className="rounded-lg border border-line bg-slate-50/80 p-4">
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
                       <Target size={17} weight="duotone" aria-hidden="true" />
                       Detailed Claim Assessment
@@ -502,7 +617,7 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
                       <Detail label="Top Reason" value={assessment.top_reason} />
                       <Detail label="Recommended Action" value={assessment.recommended_action} />
                     </dl>
-                  </section>
+                  </section> */}
                 </CardContent>
               ) : null}
             </Card>
@@ -520,7 +635,7 @@ function BatchSummaryBox({ summary }: { summary: BatchSummary }) {
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <ClipboardText size={17} weight="duotone" aria-hidden="true" />
-            Batch Overview
+            Assessment Overview
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">{summary.summary}</p>
         </div>
@@ -589,11 +704,13 @@ function BatchCount({
 function SummaryStat({
   label,
   value,
+  detail,
   icon,
   tone
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
+  detail?: string;
   icon: ReactNode;
   tone: "success" | "warning" | "danger" | "info" | "accent";
 }) {
@@ -613,7 +730,8 @@ function SummaryStat({
         </span>
         <p className="text-sm text-muted">{label}</p>
       </div>
-      <p className="mt-2 break-words text-lg font-semibold text-ink">{value}</p>
+      <div className="mt-2 break-words text-lg font-semibold text-ink">{value}</div>
+      {detail ? <p className="mt-1 text-xs leading-5 text-muted">{detail}</p> : null}
     </div>
   );
 }
@@ -625,7 +743,7 @@ function ResultList({ title, items }: { title: string; items: string[] }) {
       <ul className="mt-3 space-y-2 text-sm text-muted">
         {items.map((item, index) => (
           <li key={`${title}-${index}`} className="flex gap-2 leading-6">
-            {title === "Key Risk Indicators" ? (
+            {title === "Key Rules Triggered" ? (
               <WarningCircle className="mt-1 shrink-0 text-warning" size={14} weight="fill" aria-hidden="true" />
             ) : title === "Review Recommendations" ? (
               <ListChecks className="mt-1 shrink-0 text-action" size={14} weight="fill" aria-hidden="true" />
