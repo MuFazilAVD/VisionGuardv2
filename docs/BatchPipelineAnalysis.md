@@ -160,7 +160,7 @@ Output column:
 
 - `R008_Excessive_Units_Exam_Flag`
 
-### R009: Invalid CPT for Vision Plan
+### R009: CPT rule violation
 
 Trigger:
 

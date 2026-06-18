@@ -87,7 +87,7 @@ Trigger:
 - `ProcedureCode` is an exam code.
 - `AllowedUnits > 1`.
 
-### R009: Invalid CPT for Vision Plan
+### R009: CPT rule violation
 
 Trigger:
 

@@ -161,7 +161,7 @@ Historical mode applies:
 - R006: Modifier 59 on vision codes.
 - R007: High billed-to-allowed ratio.
 - R008: Excessive units on exam codes.
-- R009: Invalid CPT for vision plan.
+- R009: CPT rule violation.
 - R013: Provider high exam volume.
 - R014: Provider high material volume.
 - R015: Provider high average billed amount.

@@ -28,9 +28,9 @@ Use the seeded rows to explain the inputs:
 
 | Claim | Member | Key feature | Expected indicator |
 | --- | --- | --- | --- |
-| RT001 | MEM001 | Procedure `99213` is outside the configured vision-code families | Invalid CPT for vision plan |
+| RT001 | MEM001 | Procedure `99213` is outside the configured vision-code families | CPT rule violation |
 | RT002 | MEM002 | Procedure `92014` has modifier `59` and two units | Modifier 59; excessive units |
-| RT003 | MEM003 | Procedure `99213` is outside the configured vision-code families | Invalid CPT for vision plan |
+| RT003 | MEM003 | Procedure `99213` is outside the configured vision-code families | CPT rule violation |
 
 `MemberId` matters because same-member, same-day rules can connect related claim lines even when their claim IDs differ. If Member ID is blank, those rules fall back to Claim ID.
 
@@ -55,9 +55,9 @@ Expected claim-level classifications:
 
 | Claim | Risk | Main reason |
 | --- | --- | --- |
-| RT001 | Low | Invalid CPT for vision plan |
+| RT001 | Low | CPT rule violation |
 | RT002 | Medium | Modifier 59 on vision codes |
-| RT003 | Low | Invalid CPT for vision plan |
+| RT003 | Low | CPT rule violation |
 
 Exact scores and predicted review patterns may change after retraining or data changes; focus the demo on the explanation and workflow.
 

@@ -724,7 +724,7 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
 
                   <div className="grid gap-3 lg:grid-cols-3">
                     <ResultList title="Investigation Findings" items={assessment.narrative.investigation_findings} />
-                    <ResultList title="Key Risk Indicators" items={assessment.narrative.key_risk_indicators} />
+                    <ResultList title="Key Rules Triggered" items={assessment.narrative.key_risk_indicators} />
                     <ResultList title="Review Recommendations" items={assessment.narrative.recommended_review_actions} />
                   </div>
 

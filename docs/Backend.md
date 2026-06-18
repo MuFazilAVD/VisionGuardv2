@@ -153,7 +153,7 @@ Example response:
       "triggered_indicators": [
         {
           "rule_id": "R009",
-          "name": "Invalid CPT for vision plan",
+          "name": "CPT rule violation",
           "severity": "High",
           "category": "Coding"
         }

@@ -119,7 +119,7 @@ RULE_DEFINITIONS = [
     RuleDefinition(
         "R009",
         "R009_Invalid_Vision_Code_Flag",
-        "Invalid CPT for vision plan",
+        "CPT rule violation",
         "The procedure code does not match expected vision plan code families.",
         "ProcedureCode does not start with 92 or V.",
         "High",
