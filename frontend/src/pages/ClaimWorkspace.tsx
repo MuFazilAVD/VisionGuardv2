@@ -111,7 +111,7 @@ export default function ClaimWorkspace({
   syncing,
   onSync
 }: ClaimWorkspaceProps) {
-  const [claims, setClaims] = useState<ClaimRecord[]>([blankClaim()]);
+  const [claims, setClaims] = useState<ClaimRecord[]>([]);
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -209,7 +209,9 @@ export default function ClaimWorkspace({
           <div>
             <CardTitle>New Claim Batch</CardTitle>
             <p className="mt-1 text-sm text-muted">
-              {sourceLabel} - {claims.length} claim{claims.length === 1 ? "" : "s"}
+              {loading
+                ? "Loading test cases..."
+                : `${sourceLabel} - ${claims.length} claim${claims.length === 1 ? "" : "s"}`}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -242,7 +244,7 @@ export default function ClaimWorkspace({
             />
             <Button
               variant="secondary"
-              disabled={busy}
+              disabled={busy || loading}
               icon={<UploadSimple size={17} weight="bold" />}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -250,13 +252,14 @@ export default function ClaimWorkspace({
             </Button>
             <Button
               variant="secondary"
+              disabled={loading}
               icon={<Plus size={17} weight="bold" />}
               onClick={() => replaceClaims([...claims, blankClaim()], sourceLabel)}
             >
               Add Claim
             </Button>
             <Button
-              disabled={busy || !claims.length}
+              disabled={busy || loading || !claims.length}
               icon={busy ? <ArrowsClockwise className="animate-spin" size={17} weight="bold" /> : <ClipboardText size={17} weight="bold" />}
               onClick={submitClaims}
             >
@@ -284,48 +287,59 @@ export default function ClaimWorkspace({
             </p>
           ) : null}
 
-          <div className="overflow-x-auto">
-            <Table className="min-w-[3740px]">
-              <THead>
-                <TR>
-                  {editableColumns.map((column) => (
-                    <TH key={column}>{formatColumnLabel(column)}</TH>
-                  ))}
-                  <TH aria-label="Actions" />
-                </TR>
-              </THead>
-              <TBody>
-                {claims.map((claim, index) => (
-                  <TR key={`${claim.ClaimId}-${index}`}>
+          {loading ? (
+            <div
+              className="flex min-h-48 items-center justify-center gap-3 rounded-lg border border-line bg-slate-50/80 text-sm font-medium text-muted"
+              role="status"
+              aria-live="polite"
+            >
+              <ArrowsClockwise className="animate-spin text-action" size={22} weight="bold" aria-hidden="true" />
+              Loading test cases...
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[3740px]">
+                <THead>
+                  <TR>
                     {editableColumns.map((column) => (
-                      <TD key={column}>
-                        <Input
-                          aria-label={`${column} for claim ${index + 1}`}
-                          className={inputWidthForColumn(column)}
-                          value={String(claim[column] ?? "")}
-                          onChange={(event) => updateClaim(index, column, event.target.value)}
+                      <TH key={column}>{formatColumnLabel(column)}</TH>
+                    ))}
+                    <TH aria-label="Actions" />
+                  </TR>
+                </THead>
+                <TBody>
+                  {claims.map((claim, index) => (
+                    <TR key={`${claim.ClaimId}-${index}`}>
+                      {editableColumns.map((column) => (
+                        <TD key={column}>
+                          <Input
+                            aria-label={`${formatColumnLabel(column)} for claim ${index + 1}`}
+                            className={inputWidthForColumn(column)}
+                            value={String(claim[column] ?? "")}
+                            onChange={(event) => updateClaim(index, column, event.target.value)}
+                          />
+                        </TD>
+                      ))}
+                      <TD>
+                        <Button
+                          variant="ghost"
+                          aria-label="Remove claim"
+                          className="size-10 px-0 text-danger hover:bg-red-50"
+                          icon={<Trash size={17} weight="bold" />}
+                          onClick={() =>
+                            replaceClaims(
+                              claims.filter((_, claimIndex) => claimIndex !== index),
+                              sourceLabel
+                            )
+                          }
                         />
                       </TD>
-                    ))}
-                    <TD>
-                      <Button
-                        variant="ghost"
-                        aria-label="Remove claim"
-                        className="size-10 px-0 text-danger hover:bg-red-50"
-                        icon={<Trash size={17} weight="bold" />}
-                        onClick={() =>
-                          replaceClaims(
-                            claims.filter((_, claimIndex) => claimIndex !== index),
-                            sourceLabel
-                          )
-                        }
-                      />
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-          </div>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -339,14 +353,14 @@ export default function ClaimWorkspace({
 }
 
 function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
-  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(() => new Set());
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    setCollapsedCards(new Set());
+    setExpandedCards(new Set());
   }, [analysis]);
 
   const toggleCard = (cardKey: string) => {
-    setCollapsedCards((current) => {
+    setExpandedCards((current) => {
       const next = new Set(current);
       if (next.has(cardKey)) {
         next.delete(cardKey);
@@ -374,7 +388,7 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
         {analysis.assessments.map((assessment, index) => {
           const cardKey = `${assessment.claim_id}-${assessment.line_number}-${index}`;
           const contentId = `assessment-details-${index}`;
-          const isCollapsed = collapsedCards.has(cardKey);
+          const isCollapsed = !expandedCards.has(cardKey);
 
           return (
             <Card key={cardKey} className={`border-t-4 ${riskBorder(assessment.risk_level)}`}>
@@ -391,14 +405,13 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
                   <RiskBadge level={assessment.risk_level} />
                   <Button
                     variant="secondary"
+                    aria-label={isCollapsed ? "Expand claim analysis" : "Collapse claim analysis"}
                     aria-controls={contentId}
                     aria-expanded={!isCollapsed}
-                    className="min-h-8 px-3 py-1.5"
+                    className="size-8 min-h-8 px-0 py-0"
                     icon={isCollapsed ? <CaretDown size={16} weight="bold" /> : <CaretUp size={16} weight="bold" />}
                     onClick={() => toggleCard(cardKey)}
-                  >
-                    {isCollapsed ? "Expand" : "Collapse"}
-                  </Button>
+                  />
                 </div>
               </CardHeader>
               {!isCollapsed ? (
@@ -648,8 +661,11 @@ function formatDate(value: string) {
 }
 
 function formatColumnLabel(column: string) {
-  if (column === "MemberId") return "Member ID";
-  return column.replace(/_/g, " ");
+  return column
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/\bId\b/g, "ID");
 }
 
 function inputWidthForColumn(column: string) {
