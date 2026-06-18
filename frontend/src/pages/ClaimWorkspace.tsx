@@ -72,38 +72,173 @@ type ClaimWorkspaceProps = {
   onSync: () => Promise<TrainingResponse>;
 };
 
+type ProcedureProfile = {
+  code: string;
+  name: string;
+  category: "exam" | "material" | "medical";
+  eligibleRange: [number, number];
+};
+
+type DiagnosisProfile = {
+  code: string;
+  description: string;
+  category: "vision" | "medical";
+  ageRange: [number, number];
+};
+
+const procedureProfiles: ProcedureProfile[] = [
+  { code: "92002", name: "Intermediate Eye Exam New Patient", category: "exam", eligibleRange: [85, 145] },
+  { code: "92004", name: "Comprehensive Eye Exam New Patient", category: "exam", eligibleRange: [140, 260] },
+  { code: "92012", name: "Intermediate Eye Exam Established Patient", category: "exam", eligibleRange: [75, 135] },
+  { code: "92014", name: "Comprehensive Eye Exam", category: "exam", eligibleRange: [115, 220] },
+  { code: "S0620", name: "Routine Ophthalmological Examination New Patient", category: "exam", eligibleRange: [90, 180] },
+  { code: "S0621", name: "Routine Ophthalmological Examination Established Patient", category: "exam", eligibleRange: [80, 160] },
+  { code: "V2020", name: "Frames", category: "material", eligibleRange: [45, 280] },
+  { code: "V2100", name: "Single Vision Lenses", category: "material", eligibleRange: [55, 180] },
+  { code: "V2200", name: "Bifocal Lenses", category: "material", eligibleRange: [80, 240] },
+  { code: "V2300", name: "Trifocal Lenses", category: "material", eligibleRange: [110, 320] },
+  { code: "V2750", name: "Anti-Reflective Coating", category: "material", eligibleRange: [35, 110] },
+  { code: "V2755", name: "UV Coating", category: "material", eligibleRange: [20, 70] },
+  { code: "V2760", name: "Scratch Resistant Coating", category: "material", eligibleRange: [15, 65] },
+  { code: "99213", name: "Office Visit Established Patient", category: "medical", eligibleRange: [90, 210] },
+  { code: "80050", name: "General Health Panel", category: "medical", eligibleRange: [65, 190] },
+  { code: "93000", name: "Electrocardiogram", category: "medical", eligibleRange: [45, 160] }
+];
+
+const diagnosisProfiles: DiagnosisProfile[] = [
+  { code: "H52.4", description: "Presbyopia", category: "vision", ageRange: [40, 90] },
+  { code: "H52.13", description: "Myopia, bilateral", category: "vision", ageRange: [12, 80] },
+  { code: "H52.03", description: "Hypermetropia, bilateral", category: "vision", ageRange: [8, 85] },
+  { code: "H25.13", description: "Age-related nuclear cataract, bilateral", category: "vision", ageRange: [55, 92] },
+  { code: "H40.003", description: "Glaucoma suspect, bilateral", category: "vision", ageRange: [30, 90] },
+  { code: "E11.9", description: "Type 2 diabetes mellitus without complications", category: "medical", ageRange: [35, 90] },
+  { code: "I10", description: "Essential hypertension", category: "medical", ageRange: [30, 92] },
+  { code: "J02.9", description: "Acute pharyngitis, unspecified", category: "medical", ageRange: [8, 75] },
+  { code: "Z00.00", description: "General adult medical examination", category: "medical", ageRange: [18, 85] }
+];
+
+const coverageProfiles = [
+  { lob: "COMM", coverageCodes: ["PPO", "HMO", "EPO", "VSP"] },
+  { lob: "MEDICARE", coverageCodes: ["PPO", "HMO"] },
+  { lob: "MEDICAID", coverageCodes: ["HMO", "EPO"] }
+];
+
+const claimStates = ["AZ", "CA", "FL", "GA", "IL", "NC", "NY", "OH", "PA", "TX"];
+const placesOfService = ["11", "22", "24", "49", "50", "81"];
+
 function blankClaim(existingClaims: ClaimRecord[]): ClaimRecord {
+  const procedure = chooseUnusedProfile(
+    procedureProfiles,
+    new Set(existingClaims.map((claim) => String(claim.ProcedureCode ?? "").trim())),
+    (profile) => profile.code
+  );
+  const diagnosisCategory = procedure.category === "medical" ? "medical" : "vision";
+  const matchingDiagnoses = diagnosisProfiles.filter((diagnosis) => diagnosis.category === diagnosisCategory);
+  const diagnosis = chooseUnusedProfile(
+    matchingDiagnoses,
+    new Set(existingClaims.map((claim) => String(claim.Primary_Diagnosis ?? "").trim())),
+    (profile) => profile.code
+  );
+  const coverageProfile = randomChoice(coverageProfiles);
+  const eligible = randomMoney(...procedure.eligibleRange);
+  const charged = roundMoney(eligible * randomBetween(0.9, 2.7));
+  const copay = randomChoice([0, 5, 10, 15, 20, 25, 30, 40]);
+  const coinsurance = randomChoice([0, 0, 5, 10, 15, 20]);
+  const deductible = randomChoice([0, 0, 10, 25, 50, 75]);
+  const units =
+    procedure.category === "exam"
+      ? Math.random() < 0.25
+        ? randomInteger(2, 4)
+        : 1
+      : randomInteger(1, procedure.category === "material" ? 4 : 3);
+
   return {
     ClaimId: nextIdentifier(existingClaims, "ClaimId", "RT"),
     MemberId: nextIdentifier(existingClaims, "MemberId", "MEM"),
     Gender: Math.random() < 0.5 ? "M" : "F",
-    Age: 40,
+    Age: randomInteger(...diagnosis.ageRange),
     ServiceDateFrom: nextServiceDate(existingClaims),
-    PlaceOfService: "11",
-    LineNumber: 1,
-    ProcedureCode: "92014",
-    ProcedureName: "Comprehensive Eye Exam",
-    Modifier: "",
+    PlaceOfService: randomChoice(placesOfService),
+    LineNumber: randomInteger(1, 4),
+    ProcedureCode: procedure.code,
+    ProcedureName: procedure.name,
+    Modifier: randomModifier(procedure.category),
     Modifier2: "",
     Modifier3: "",
     Primary_Diagnosis_Pointer: "1",
-    Primary_Diagnosis: "H52.4",
-    LONG_DESCRIPTION: "Routine eye exam",
-    ClaimLineTotalPaid: 0,
-    AmtCharged: 150,
-    AllowedUnits: 1,
-    AmtDisallowed: 0,
-    AmtEligible: 120,
-    AmtCopay: 0,
-    AmtCoinsurance: 0,
-    AmtDeductible: 0,
-    ProviderNPI: "1234567890",
-    GroupId: "G1",
-    GroupNumber: "GRP100",
-    LOB: "COMM",
-    CoverageCode: "PPO",
-    State: "OH"
+    Primary_Diagnosis: diagnosis.code,
+    LONG_DESCRIPTION: diagnosis.description,
+    ClaimLineTotalPaid: roundMoney(Math.max(eligible - copay - coinsurance - deductible, 0)),
+    AmtCharged: charged,
+    AllowedUnits: units,
+    AmtDisallowed: roundMoney(Math.max(charged - eligible, 0)),
+    AmtEligible: eligible,
+    AmtCopay: copay,
+    AmtCoinsurance: coinsurance,
+    AmtDeductible: deductible,
+    ProviderNPI: uniqueGeneratedValue(existingClaims, "ProviderNPI", () => randomDigits(10)),
+    GroupId: uniqueGeneratedValue(existingClaims, "GroupId", () => `G${randomInteger(10, 999)}`),
+    GroupNumber: uniqueGeneratedValue(existingClaims, "GroupNumber", () => `GRP${randomInteger(100, 9999)}`),
+    LOB: coverageProfile.lob,
+    CoverageCode: randomChoice(coverageProfile.coverageCodes),
+    State: randomChoice(claimStates)
   };
+}
+
+function chooseUnusedProfile<T>(
+  profiles: readonly T[],
+  usedValues: Set<string>,
+  valueForProfile: (profile: T) => string
+) {
+  const unusedProfiles = profiles.filter((profile) => !usedValues.has(valueForProfile(profile)));
+  return randomChoice(unusedProfiles.length ? unusedProfiles : profiles);
+}
+
+function randomModifier(category: ProcedureProfile["category"]) {
+  if (category === "exam") return randomChoice(["", "", "", "25", "59"]);
+  if (category === "material") return randomChoice(["", "", "", "50", "59"]);
+  return randomChoice(["", "", "", "25"]);
+}
+
+function uniqueGeneratedValue(
+  existingClaims: ClaimRecord[],
+  field: "ProviderNPI" | "GroupId" | "GroupNumber",
+  generate: () => string
+) {
+  const existingValues = new Set(existingClaims.map((claim) => String(claim[field] ?? "").trim()));
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const candidate = generate();
+    if (!existingValues.has(candidate)) return candidate;
+  }
+
+  return generate();
+}
+
+function randomChoice<T>(values: readonly T[]): T {
+  return values[Math.floor(Math.random() * values.length)];
+}
+
+function randomInteger(min: number, max: number) {
+  return Math.floor(randomBetween(min, max + 1));
+}
+
+function randomBetween(min: number, max: number) {
+  return min + Math.random() * (max - min);
+}
+
+function randomMoney(min: number, max: number) {
+  return roundMoney(randomBetween(min, max));
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function randomDigits(length: number) {
+  let value = String(randomInteger(1, 9));
+  while (value.length < length) value += String(randomInteger(0, 9));
+  return value;
 }
 
 function nextIdentifier(
@@ -158,14 +293,35 @@ function nextServiceDate(existingClaims: ClaimRecord[]) {
   const usDateCount = parsedDates.filter((date) => date.style === "us").length;
   const isoDateCount = parsedDates.filter((date) => date.style === "iso").length;
   const preferredStyle: ParsedClaimDate["style"] = isoDateCount > usDateCount ? "iso" : "us";
-  const sourceDate = parsedDates[parsedDates.length - 1];
+  const yearCounts = new Map<number, number>();
+  parsedDates.forEach((date) => yearCounts.set(date.year, (yearCounts.get(date.year) ?? 0) + 1));
+  const preferredYear =
+    [...yearCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? new Date().getFullYear();
+  const usedDates = new Set(parsedDates.map((date) => `${date.year}-${date.month}-${date.day}`));
+  const daysInYear = new Date(preferredYear, 1, 29).getMonth() === 1 ? 366 : 365;
 
-  if (sourceDate) {
-    return formatClaimDate(sourceDate, preferredStyle);
+  for (let attempt = 0; attempt < daysInYear; attempt += 1) {
+    const generatedDate = new Date(preferredYear, 0, randomInteger(1, daysInYear));
+    const candidate: ParsedClaimDate = {
+      year: generatedDate.getFullYear(),
+      month: generatedDate.getMonth() + 1,
+      day: generatedDate.getDate(),
+      style: preferredStyle
+    };
+    const dateKey = `${candidate.year}-${candidate.month}-${candidate.day}`;
+    if (!usedDates.has(dateKey)) return formatClaimDate(candidate, preferredStyle);
   }
 
-  const today = new Date();
-  return `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`;
+  const fallbackDate = new Date(preferredYear + 1, 0, 1);
+  return formatClaimDate(
+    {
+      year: fallbackDate.getFullYear(),
+      month: fallbackDate.getMonth() + 1,
+      day: fallbackDate.getDate(),
+      style: preferredStyle
+    },
+    preferredStyle
+  );
 }
 
 type ParsedClaimDate = {
