@@ -76,7 +76,7 @@ function blankClaim(existingClaims: ClaimRecord[]): ClaimRecord {
   return {
     ClaimId: nextIdentifier(existingClaims, "ClaimId", "RT"),
     MemberId: nextIdentifier(existingClaims, "MemberId", "MEM"),
-    Gender: "U",
+    Gender: Math.random() < 0.5 ? "M" : "F",
     Age: 40,
     ServiceDateFrom: nextServiceDate(existingClaims),
     PlaceOfService: "11",
