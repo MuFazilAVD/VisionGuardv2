@@ -27,6 +27,7 @@ export type SampleDataResponse = {
 
 export type ClaimRecord = {
   ClaimId: string;
+  MemberId?: string;
   Gender?: string;
   Age?: number | string;
   ServiceDateFrom?: string;
@@ -80,6 +81,7 @@ export type ClaimNarrative = {
 
 export type ClaimAssessment = {
   claim_id: string;
+  member_id: string;
   line_number: number;
   provider_npi: string;
   procedure_code: string;

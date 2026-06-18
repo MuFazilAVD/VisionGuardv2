@@ -26,8 +26,9 @@ async def analyze(request: Request) -> dict:
             if upload is None:
                 raise ValueError("CSV upload must use a form field named file.")
             contents = await upload.read()
-            frame = pd.read_csv(BytesIO(contents))
-            claims = frame.where(pd.notna(frame), "").to_dict(orient="records")
+            frame = pd.read_csv(BytesIO(contents), dtype=str, keep_default_na=False)
+            records = frame.to_dict(orient="records")
+            claims = validate_claim_payload({"claims": records})
             logger.info("Parsed %d claim(s) from uploaded CSV", len(claims))
         else:
             payload = await request.json()

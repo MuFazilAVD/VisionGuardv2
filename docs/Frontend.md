@@ -77,7 +77,7 @@ CSV upload behavior:
 Required behavior:
 
 - Submit one or more claims.
-- Render the full incoming claim schema: `ClaimId`, `Gender`, `Age`, `ServiceDateFrom`, `PlaceOfService`, `LineNumber`, `ProcedureCode`, `ProcedureName`, `Modifier`, `Modifier2`, `Modifier3`, `Primary_Diagnosis_Pointer`, `Primary_Diagnosis`, `LONG_DESCRIPTION`, `ClaimLineTotalPaid`, `AmtCharged`, `AllowedUnits`, `AmtDisallowed`, `AmtEligible`, `AmtCopay`, `AmtCoinsurance`, `AmtDeductible`, `ProviderNPI`, `GroupId`, `GroupNumber`, `LOB`, `CoverageCode`, and `State`.
+- Render the full incoming claim schema: `ClaimId`, `MemberId`, `Gender`, `Age`, `ServiceDateFrom`, `PlaceOfService`, `LineNumber`, `ProcedureCode`, `ProcedureName`, `Modifier`, `Modifier2`, `Modifier3`, `Primary_Diagnosis_Pointer`, `Primary_Diagnosis`, `LONG_DESCRIPTION`, `ClaimLineTotalPaid`, `AmtCharged`, `AllowedUnits`, `AmtDisallowed`, `AmtEligible`, `AmtCopay`, `AmtCoinsurance`, `AmtDeductible`, `ProviderNPI`, `GroupId`, `GroupNumber`, `LOB`, `CoverageCode`, and `State`.
 - Keep financial fields editable.
 - Keep procedure, diagnosis, and modifier fields editable.
 - Clear stale assessment results whenever the claim data changes.

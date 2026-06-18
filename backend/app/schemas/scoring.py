@@ -28,6 +28,7 @@ class ClaimNarrative(BaseModel):
 
 class ClaimAssessment(BaseModel):
     claim_id: str
+    member_id: str
     line_number: int
     provider_npi: str
     procedure_code: str

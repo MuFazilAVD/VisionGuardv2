@@ -104,6 +104,7 @@ JSON request:
   "claims": [
     {
       "ClaimId": "RT001",
+      "MemberId": "MEM001",
       "Gender": "F",
       "Age": 45,
       "ServiceDateFrom": "5/12/2024",

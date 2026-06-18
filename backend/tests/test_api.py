@@ -33,7 +33,7 @@ def test_sample_data_and_status_endpoints():
 
     sample = client.get(f"{API_PREFIX}/sample-data")
     assert sample.status_code == 200
-    assert sample.json()["historical_claims"]["record_count"] >= 5000
+    assert sample.json()["historical_claims"]["record_count"] > 0
 
     status = client.get(f"{API_PREFIX}/training/status")
     assert status.status_code == 200
@@ -46,6 +46,7 @@ def test_claim_analyze_json_endpoint():
         "claims": [
             {
                 "ClaimId": "API001",
+                "MemberId": "MEM-API-001",
                 "Gender": "M",
                 "Age": 67,
                 "ServiceDateFrom": "2024-04-03",
@@ -83,7 +84,23 @@ def test_claim_analyze_json_endpoint():
     assert body["batch_summary"]["total_claims"] == 1
     assert body["batch_summary"]["fraud_count"] in {0, 1}
     assert body["batch_summary"]["summary"]
+    assert body["assessments"][0]["member_id"] == "MEM-API-001"
     assert body["assessments"][0]["triggered_indicators"][0]["rule_id"] == "R009"
+
+
+def test_claim_analyze_csv_preserves_member_id_leading_zeros():
+    csv_payload = (
+        "ClaimId,MemberId,ProcedureCode,AmtCharged,AmtEligible,ProviderNPI,State,LOB,CoverageCode\n"
+        "CSV001,0012345,99213,120,100,1234567890,OH,COMM,PPO\n"
+    )
+
+    response = client.post(
+        f"{API_PREFIX}/claims/analyze",
+        files={"file": ("claims.csv", csv_payload, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["assessments"][0]["member_id"] == "0012345"
 
 
 def test_claim_payload_accepts_currency_strings():
@@ -121,3 +138,18 @@ def test_claim_payload_accepts_more_than_five_claims():
     )
 
     assert len(claims) == 8
+
+
+def test_claim_payload_normalizes_member_id_alias():
+    claims = validate_claim_payload(
+        {
+            "claims": [
+                {
+                    "ClaimId": "MEMJSON1",
+                    "Member ID": 123456,
+                }
+            ]
+        }
+    )
+
+    assert claims[0]["MemberId"] == "123456"

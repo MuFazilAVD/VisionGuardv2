@@ -1,13 +1,14 @@
 import logging
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.utils.number_parsing import parse_numeric_value
 
 
 STRING_FIELDS = [
     "ClaimId",
+    "MemberId",
     "Gender",
     "ServiceDateFrom",
     "PlaceOfService",
@@ -47,6 +48,17 @@ class ClaimInput(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     ClaimId: str = Field(..., min_length=1)
+    MemberId: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "MemberId",
+            "Member ID",
+            "member_id",
+            "Member_Id",
+            "MemeberId",
+            "Memeber ID",
+        ),
+    )
     Gender: str = ""
     Age: int | float = 0
     ServiceDateFrom: str = ""

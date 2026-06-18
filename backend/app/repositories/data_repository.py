@@ -12,6 +12,27 @@ from app.utils.paths import HISTORICAL_CLAIMS_PATH, ROOT_REALTIME_CLAIMS, RULES_
 
 logger = logging.getLogger(__name__)
 
+CLAIM_COLUMN_ALIASES = {
+    "Member ID": "MemberId",
+    "member_id": "MemberId",
+    "Member_Id": "MemberId",
+    "MemeberId": "MemberId",
+    "Memeber ID": "MemberId",
+    "Primary Diagnosis Pointer": "Primary_Diagnosis_Pointer",
+    "Primary Diagnosis": "Primary_Diagnosis",
+    "LONG DESCRIPTION": "LONG_DESCRIPTION",
+}
+
+CLAIM_STRING_DTYPES = {
+    "ClaimId": str,
+    "MemberId": str,
+    "Member ID": str,
+    "ProviderNPI": str,
+    "ProcedureCode": str,
+    "GroupId": str,
+    "GroupNumber": str,
+}
+
 
 class DataRepository:
     def __init__(self) -> None:
@@ -20,7 +41,8 @@ class DataRepository:
 
     def load_historical_claims(self) -> pd.DataFrame:
         logger.info("Loading historical claims from %s", HISTORICAL_CLAIMS_PATH)
-        frame = pd.read_csv(HISTORICAL_CLAIMS_PATH, dtype={"ProviderNPI": str, "ProcedureCode": str})
+        frame = pd.read_csv(HISTORICAL_CLAIMS_PATH, dtype=CLAIM_STRING_DTYPES)
+        frame = self._canonicalize_claim_columns(frame)
         logger.info("Loaded historical claims: rows=%d columns=%d", len(frame), len(frame.columns))
         return frame
 
@@ -29,8 +51,20 @@ class DataRepository:
             logger.info("Realtime sample claims file missing at %s", ROOT_REALTIME_CLAIMS)
             return pd.DataFrame()
         logger.info("Loading realtime sample claims from %s", ROOT_REALTIME_CLAIMS)
-        frame = pd.read_csv(ROOT_REALTIME_CLAIMS, dtype={"ProviderNPI": str, "ProcedureCode": str})
+        frame = pd.read_csv(ROOT_REALTIME_CLAIMS, dtype=CLAIM_STRING_DTYPES)
+        frame = self._canonicalize_claim_columns(frame)
         logger.info("Loaded realtime sample claims: rows=%d columns=%d", len(frame), len(frame.columns))
+        return frame
+
+    def _canonicalize_claim_columns(self, frame: pd.DataFrame) -> pd.DataFrame:
+        renames = {
+            source: target
+            for source, target in CLAIM_COLUMN_ALIASES.items()
+            if source in frame.columns and target not in frame.columns
+        }
+        if renames:
+            logger.info("Canonicalizing claim columns: %s", renames)
+            frame = frame.rename(columns=renames)
         return frame
 
     def load_rules(self) -> pd.DataFrame:

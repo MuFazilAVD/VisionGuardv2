@@ -34,6 +34,7 @@ import type {
 
 const editableColumns = [
   "ClaimId",
+  "MemberId",
   "Gender",
   "Age",
   "ServiceDateFrom",
@@ -73,6 +74,7 @@ type ClaimWorkspaceProps = {
 function blankClaim(): ClaimRecord {
   return {
     ClaimId: `NEW${Date.now().toString().slice(-5)}`,
+    MemberId: "",
     Gender: "U",
     Age: 40,
     ServiceDateFrom: "2024-06-01",
@@ -283,7 +285,7 @@ export default function ClaimWorkspace({
           ) : null}
 
           <div className="overflow-x-auto">
-            <Table className="min-w-[3600px]">
+            <Table className="min-w-[3740px]">
               <THead>
                 <TR>
                   {editableColumns.map((column) => (
@@ -481,6 +483,7 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
                       Detailed Claim Assessment
                     </h3>
                     <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <Detail label="Member ID" value={assessment.member_id || "Not provided"} />
                       <Detail label="Provider" value={assessment.provider_npi} />
                       <Detail label="Category" value={assessment.category} />
                       <Detail label="Top Reason" value={assessment.top_reason} />
@@ -645,12 +648,13 @@ function formatDate(value: string) {
 }
 
 function formatColumnLabel(column: string) {
+  if (column === "MemberId") return "Member ID";
   return column.replace(/_/g, " ");
 }
 
 function inputWidthForColumn(column: string) {
   if (column === "LONG_DESCRIPTION" || column === "ProcedureName") return "min-w-72";
-  if (column === "ServiceDateFrom" || column === "ProviderNPI") return "min-w-40";
+  if (column === "MemberId" || column === "ServiceDateFrom" || column === "ProviderNPI") return "min-w-40";
   if (column.includes("Amt") || column === "ClaimLineTotalPaid") return "min-w-32";
   return "min-w-28";
 }
@@ -662,7 +666,7 @@ function parseClaimsCsv(text: string): ClaimRecord[] {
   const [headerRow, ...dataRows] = rows;
   const headers = headerRow.map((header, index) => {
     const normalized = header.replace(/^\uFEFF/, "").trim();
-    return normalized || `Column${index + 1}`;
+    return canonicalClaimHeader(normalized) || `Column${index + 1}`;
   });
 
   return dataRows
@@ -679,6 +683,15 @@ function parseClaimsCsv(text: string): ClaimRecord[] {
       return claim;
     })
     .filter((claim) => Object.values(claim).some((value) => String(value ?? "").trim() !== ""));
+}
+
+function canonicalClaimHeader(header: string) {
+  const compact = header.toLowerCase().replace(/[\s_-]+/g, "");
+  if (compact === "memberid" || compact === "memeberid") return "MemberId";
+  if (compact === "primarydiagnosispointer") return "Primary_Diagnosis_Pointer";
+  if (compact === "primarydiagnosis") return "Primary_Diagnosis";
+  if (compact === "longdescription") return "LONG_DESCRIPTION";
+  return header;
 }
 
 function parseCsvRows(text: string): string[][] {

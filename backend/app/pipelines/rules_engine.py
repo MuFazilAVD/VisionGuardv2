@@ -180,8 +180,8 @@ RULE_DEFINITIONS = [
         "R100",
         "R100_Two_Exams_One_Day",
         "Two exams in one day",
-        "More than one distinct eye exam code appears on the same claim service day.",
-        "Same ClaimId and ServiceDate contains more than one distinct exam code.",
+        "More than one distinct eye exam code appears for the same member on one service day.",
+        "Same MemberId and ServiceDate contains more than one distinct exam code; ClaimId is used when MemberId is blank.",
         "Medium",
         "Utilization Pattern",
         True,
@@ -190,8 +190,8 @@ RULE_DEFINITIONS = [
         "R101",
         "R101_Exam_After_Comprehensive",
         "Exam after comprehensive",
-        "A routine exam appears on the same claim service day as a comprehensive exam.",
-        "Same ClaimId and ServiceDate contains a comprehensive exam and a routine exam.",
+        "A routine exam appears for the same member and service day as a comprehensive exam.",
+        "Same MemberId and ServiceDate contains a comprehensive exam and a routine exam; ClaimId is used when MemberId is blank.",
         "Medium",
         "Utilization Pattern",
         True,
@@ -200,8 +200,8 @@ RULE_DEFINITIONS = [
         "R102",
         "R102_CCI_Edit",
         "CCI edit conflict",
-        "Procedure codes on the same claim service day appear in a known CCI conflict pair.",
-        "Same ClaimId and ServiceDate contains one of the configured CCI code pairs.",
+        "Procedure codes for the same member and service day appear in a known CCI conflict pair.",
+        "Same MemberId and ServiceDate contains one of the configured CCI code pairs; ClaimId is used when MemberId is blank.",
         "High",
         "Coding Review",
         True,
@@ -355,6 +355,7 @@ _BUSINESS_RULE_IMPLEMENTATIONS = {
 
 CANONICAL_CLAIM_COLUMNS = [
     "ClaimId",
+    "MemberId",
     "Gender",
     "Age",
     "ServiceDateFrom",
@@ -414,7 +415,7 @@ def normalize_claims(df: pd.DataFrame) -> pd.DataFrame:
         result[column] = clean_numeric_series(result[column], index=result.index)
 
     result["ProcedureCode"] = result["ProcedureCode"].astype(str).str.strip().str.upper()
-    result["ServiceDate"] = pd.to_datetime(result["ServiceDateFrom"], errors="coerce")
+    result["ServiceDate"] = pd.to_datetime(result["ServiceDateFrom"], format="mixed", errors="coerce")
     logger.info("Claims normalization complete with shape=%s", result.shape)
     return result
 
@@ -505,18 +506,33 @@ def _apply_claim_day_context_rules(result: pd.DataFrame, context_df: pd.DataFram
 
 def _matching_claim_day_context(incoming: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
     logger.info("Finding matching claim-day context rows")
-    incoming_keys = incoming[["ClaimId", "ServiceDate"]].drop_duplicates()
+    incoming = incoming.copy()
+    context = context.copy()
+    incoming["_claim_subject_key"] = _claim_subject_key(incoming)
+    context["_claim_subject_key"] = _claim_subject_key(context)
+    incoming_keys = incoming[["_claim_subject_key", "ServiceDate"]].drop_duplicates()
     if incoming_keys.empty:
         logger.info("No incoming claim-day keys found")
         return context.iloc[0:0].copy()
-    matched = context.merge(incoming_keys, on=["ClaimId", "ServiceDate"], how="inner")
+    matched = context.merge(incoming_keys, on=["_claim_subject_key", "ServiceDate"], how="inner")
+    matched = matched.drop(columns=["_claim_subject_key"])
     logger.info("Matched %d claim-day context row(s)", len(matched))
     return matched
 
 
+def _claim_subject_key(df: pd.DataFrame) -> pd.Series:
+    member_id = df["MemberId"].fillna("").astype(str).str.strip()
+    claim_id = df["ClaimId"].fillna("").astype(str).str.strip()
+    return pd.Series(
+        np.where(member_id.ne(""), "M|" + member_id, "C|" + claim_id),
+        index=df.index,
+        dtype="object",
+    )
+
+
 def _claim_day_key(df: pd.DataFrame) -> pd.Series:
     service_day = pd.to_datetime(df["ServiceDate"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
-    return df["ClaimId"].fillna("").astype(str).str.strip() + "|" + service_day
+    return _claim_subject_key(df) + "|" + service_day
 
 
 def _has_cci_pair(codes: set[str]) -> bool:

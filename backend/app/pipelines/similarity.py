@@ -11,7 +11,8 @@ from app.utils.number_parsing import clean_numeric_series
 
 
 SIMILARITY_THRESHOLD = 0.85
-JOIN_KEYS = ["ProviderNPI", "State", "LOB", "CoverageCode"]
+MEMBER_KEY = "MemberId"
+FALLBACK_JOIN_KEYS = ["ProviderNPI", "State", "LOB", "CoverageCode"]
 SIMILARITY_FEATURES = [
     "Age",
     "Rule_Flag_Count",
@@ -67,9 +68,7 @@ def score_historical_similarity(
 
     results: list[dict[str, Any]] = []
     for _, row in rt.iterrows():
-        candidates = hist
-        for key in JOIN_KEYS:
-            candidates = candidates[candidates[key] == row[key]]
+        candidates = _historical_candidates(row, hist)
 
         if candidates.empty:
             logger.info("No historical similarity candidates for claim_id=%s", row.get("ClaimId", ""))
@@ -106,6 +105,7 @@ def score_historical_similarity(
                 "historical_pattern_confidence": round(best_score, 6) if above_threshold else 0.0,
                 "historical_case_priority": _case_priority(pattern) if above_threshold else "LOW",
                 "historical_claim_id": str(best.get("ClaimId", "")) if above_threshold else "",
+                "historical_member_id": str(best.get("MemberId", "")) if above_threshold else "",
                 "historical_line_number": int(best.get("LineNumber", 0) or 0) if above_threshold else 0,
             }
         )
@@ -117,7 +117,7 @@ def score_historical_similarity(
 def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Preparing frame for historical similarity with shape=%s", df.shape)
     result = df.copy()
-    for key in JOIN_KEYS:
+    for key in [MEMBER_KEY, *FALLBACK_JOIN_KEYS]:
         if key not in result.columns:
             result[key] = ""
         result[key] = result[key].fillna("").astype(str).str.strip().str.upper()
@@ -132,6 +132,25 @@ def _prepare_frame(df: pd.DataFrame) -> pd.DataFrame:
         result[feature] = clean_numeric_series(result[feature], index=result.index).astype(float)
     logger.info("Similarity frame prepared with shape=%s", result.shape)
     return result
+
+
+def _historical_candidates(row: pd.Series, historical: pd.DataFrame) -> pd.DataFrame:
+    member_id = str(row.get(MEMBER_KEY, "") or "").strip().upper()
+    historical_has_members = historical[MEMBER_KEY].ne("").any()
+    if member_id and historical_has_members:
+        candidates = historical[historical[MEMBER_KEY] == member_id]
+        logger.info(
+            "Historical candidates selected by member_id=%s count=%d",
+            member_id,
+            len(candidates),
+        )
+        return candidates
+
+    candidates = historical
+    for key in FALLBACK_JOIN_KEYS:
+        candidates = candidates[candidates[key] == row[key]]
+    logger.info("Historical candidates selected by fallback keys count=%d", len(candidates))
+    return candidates
 
 
 def _candidate_scores(row: pd.Series, candidates: pd.DataFrame, anomaly_stats: dict[str, Any]) -> np.ndarray:
@@ -185,5 +204,6 @@ def _default_result() -> dict[str, Any]:
         "historical_pattern_confidence": 0.0,
         "historical_case_priority": "LOW",
         "historical_claim_id": "",
+        "historical_member_id": "",
         "historical_line_number": 0,
     }

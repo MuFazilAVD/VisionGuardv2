@@ -93,6 +93,52 @@ def test_realtime_rules_use_historical_claim_day_context():
     assert scored.loc[0, "R101_Exam_After_Comprehensive"] == 1
 
 
+def test_realtime_rules_connect_same_member_across_claim_ids():
+    claims = pd.DataFrame(
+        [
+            {
+                "ClaimId": "NEW-CLAIM",
+                "MemberId": "MEM-100",
+                "ServiceDateFrom": "2024-05-12",
+                "ProcedureCode": "92014",
+                "AmtCharged": 120,
+                "AmtEligible": 100,
+                "AllowedUnits": 1,
+                "Primary_Diagnosis": "H52.4",
+            }
+        ]
+    )
+    historical_context = pd.DataFrame(
+        [
+            {
+                "ClaimId": "OLD-CLAIM",
+                "MemberId": "MEM-100",
+                "ServiceDateFrom": "2024-05-12",
+                "ProcedureCode": "92012",
+                "AmtCharged": 90,
+                "AmtEligible": 80,
+                "AllowedUnits": 1,
+                "Primary_Diagnosis": "H52.4",
+            },
+            {
+                "ClaimId": "NEW-CLAIM",
+                "MemberId": "OTHER-MEMBER",
+                "ServiceDateFrom": "2024-05-12",
+                "ProcedureCode": "92002",
+                "AmtCharged": 80,
+                "AmtEligible": 70,
+                "AllowedUnits": 1,
+                "Primary_Diagnosis": "H52.4",
+            },
+        ]
+    )
+
+    scored = apply_rules(claims, mode="realtime", context_df=historical_context)
+
+    assert scored.loc[0, "R100_Two_Exams_One_Day"] == 1
+    assert scored.loc[0, "R101_Exam_After_Comprehensive"] == 1
+
+
 def test_business_rule_catalog_matches_pasted_rules():
     rules = rule_definitions_for_workbook()
     executable_rules = executable_rule_definitions_for_workbook()

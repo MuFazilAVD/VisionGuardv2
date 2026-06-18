@@ -23,6 +23,7 @@ Modern replacement:
 - Accept CSV upload or JSON payload through `POST /visionguardv2/api/claims/analyze`.
 - Accept one or more claims in a request.
 - Use the same canonical schema as `realtime_claims.csv`.
+- Preserve `MemberId` as an identifier and use it for member-level historical context; do not use it as a raw model feature.
 
 ## Realtime Step 2: Normalize Types
 
@@ -226,6 +227,7 @@ Modern replacement:
 The notebook selects a final Power BI-ready set of fields:
 
 - ClaimId
+- MemberId
 - LineNumber
 - ServiceDate
 - ProcedureCode

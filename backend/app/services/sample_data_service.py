@@ -139,6 +139,7 @@ class SampleDataService:
 
         return {
             "ClaimId": f"H{idx + 1:06d}",
+            "MemberId": f"M{(idx // 2) + 1:07d}",
             "Gender": str(rng.choice(GENDERS, p=[0.52, 0.47, 0.01])),
             "Age": age,
             "ServiceDateFrom": (pd.Timestamp("2024-01-01") + pd.Timedelta(days=int(rng.integers(0, 365)))).strftime("%Y-%m-%d"),

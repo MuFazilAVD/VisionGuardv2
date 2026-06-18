@@ -90,6 +90,7 @@ class RealtimeService:
 
             context = {
                 "claim_id": str(row.get("ClaimId", "")),
+                "member_id": str(row.get("MemberId", "")),
                 "line_number": int(row.get("LineNumber", 1) or 1),
                 "provider_npi": str(row.get("ProviderNPI", "")),
                 "procedure_code": str(row.get("ProcedureCode", "")),
@@ -136,6 +137,7 @@ class RealtimeService:
                         "historical_pattern_confidence": similarity["historical_pattern_confidence"],
                         "historical_case_priority": similarity["historical_case_priority"],
                         "historical_claim_id": similarity["historical_claim_id"],
+                        "historical_member_id": similarity["historical_member_id"],
                         "historical_line_number": similarity["historical_line_number"],
                         "ml_predicted_pattern": model_pattern,
                         "service_date": str(row.get("ServiceDateFrom", "")),

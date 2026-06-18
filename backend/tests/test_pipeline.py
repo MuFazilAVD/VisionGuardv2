@@ -95,3 +95,53 @@ def test_similarity_layer_promotes_close_historical_match():
 
     assert result["similarity_above_threshold"] is True
     assert result["historical_pattern"] == "Exam after Comprehensive"
+
+
+def test_similarity_uses_same_member_history_before_population_keys():
+    realtime = {
+        "ClaimId": "RT-MEMBER",
+        "MemberId": "MEM-1",
+        "LineNumber": 1,
+        "ProviderNPI": "111",
+        "State": "OH",
+        "LOB": "COMM",
+        "CoverageCode": "PPO",
+        "ProcedureCode": "92014",
+        "Age": 45,
+        "Rule_Flag_Count": 2,
+        "AmtCharged": 120,
+        "AmtEligible": 100,
+        "ClaimLineTotalPaid": 80,
+        "AllowedUnits": 1,
+    }
+    historical = [
+        {
+            **realtime,
+            "ClaimId": "HIST-SAME-MEMBER",
+            "ProviderNPI": "999",
+            "State": "TX",
+            "LOB": "MEDICARE",
+            "CoverageCode": "HMO",
+            "Flag": "Exam after Comprehensive",
+        },
+        {
+            **realtime,
+            "ClaimId": "HIST-OTHER-MEMBER",
+            "MemberId": "MEM-2",
+            "Flag": "CCI Edits Claims",
+        },
+    ]
+    anomaly_stats = {
+        "means": {feature: 0 for feature in ["Age", "Rule_Flag_Count", "AmtCharged", "AmtEligible", "ClaimLineTotalPaid", "AllowedUnits"]},
+        "stds": {feature: 1 for feature in ["Age", "Rule_Flag_Count", "AmtCharged", "AmtEligible", "ClaimLineTotalPaid", "AllowedUnits"]},
+    }
+
+    result = score_historical_similarity(
+        realtime=pd.DataFrame([realtime]),
+        historical=pd.DataFrame(historical),
+        anomaly_stats=anomaly_stats,
+    )[0]
+
+    assert result["similarity_above_threshold"] is True
+    assert result["historical_claim_id"] == "HIST-SAME-MEMBER"
+    assert result["historical_member_id"] == "MEM-1"

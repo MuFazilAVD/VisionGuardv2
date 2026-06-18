@@ -7,6 +7,7 @@ The realtime sample establishes the canonical claim schema. Historical data uses
 | Field | Type | Notes |
 | --- | --- | --- |
 | ClaimId | string | Claim identifier. |
+| MemberId | string | Member identifier used to connect claim-day and historical context. |
 | Gender | string | Common values: M, F, U. |
 | Age | integer | Member age. |
 | ServiceDateFrom | string/date | Parsed during processing. |
