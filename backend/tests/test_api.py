@@ -7,20 +7,24 @@ from app.schemas.claim import validate_claim_payload
 client = TestClient(app)
 API_PREFIX = "/visionguardv2/api"
 HEALTH_PATH = "/visionguardv2/health"
-PRODUCTION_ORIGIN = "https://d2brdeqy144bwg.cloudfront.net"
+PRODUCTION_ORIGINS = (
+    "https://d2brdeqy144bwg.cloudfront.net",
+    "https://d3bkb5k71wphsh.cloudfront.net",
+)
 
 
-def test_production_origin_cors_preflight():
-    response = client.options(
-        f"{API_PREFIX}/sample-data",
-        headers={
-            "Origin": PRODUCTION_ORIGIN,
-            "Access-Control-Request-Method": "GET",
-        },
-    )
+def test_production_origins_cors_preflight():
+    for production_origin in PRODUCTION_ORIGINS:
+        response = client.options(
+            f"{API_PREFIX}/sample-data",
+            headers={
+                "Origin": production_origin,
+                "Access-Control-Request-Method": "GET",
+            },
+        )
 
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == PRODUCTION_ORIGIN
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == production_origin
 
 
 def test_sample_data_and_status_endpoints():

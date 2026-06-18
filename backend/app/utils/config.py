@@ -5,7 +5,10 @@ from functools import lru_cache
 
 
 DEFAULT_OPENAI_BASE_URL = "https://d2brdeqy144bwg.cloudfront.net/myllm/v1"
-PRODUCTION_APP_ORIGIN = "https://d2brdeqy144bwg.cloudfront.net"
+PRODUCTION_APP_ORIGINS = (
+    "https://d2brdeqy144bwg.cloudfront.net",
+    "https://d3bkb5k71wphsh.cloudfront.net",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +29,9 @@ def get_settings() -> Settings:
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173",
     )
     cors_origins = [origin.strip().rstrip("/") for origin in origins.split(",") if origin.strip()]
-    if PRODUCTION_APP_ORIGIN not in cors_origins:
-        cors_origins.append(PRODUCTION_APP_ORIGIN)
+    for production_origin in PRODUCTION_APP_ORIGINS:
+        if production_origin not in cors_origins:
+            cors_origins.append(production_origin)
 
     settings = Settings(
         openai_base_url=os.getenv("OPENAI_BASE_URL", DEFAULT_OPENAI_BASE_URL),

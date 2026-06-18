@@ -42,7 +42,7 @@ Backend:
 OPENAI_BASE_URL=https://d2brdeqy144bwg.cloudfront.net/myllm/v1
 OPENAI_API_KEY=<secret>
 OPENAI_MODEL=<model>
-APP_CORS_ORIGINS=https://d2brdeqy144bwg.cloudfront.net,http://localhost:5173,http://127.0.0.1:5173
+APP_CORS_ORIGINS=https://d2brdeqy144bwg.cloudfront.net,https://d3bkb5k71wphsh.cloudfront.net,http://localhost:5173,http://127.0.0.1:5173
 ```
 
 Frontend:
