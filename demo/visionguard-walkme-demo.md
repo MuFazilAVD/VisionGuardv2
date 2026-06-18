@@ -74,7 +74,6 @@ Each expanded card shows:
 - **Executive Summary** - concise business interpretation.
 - **Findings, indicators, and recommendations** - the reasons and suggested next action.
 - **Triggered Indicators** - rule name, severity, category, and description.
-- **Detailed Claim Assessment** - Member ID, provider, category, top reason, and recommended action.
 
 The displayed values can be read mathematically as:
 

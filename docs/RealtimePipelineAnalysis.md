@@ -178,7 +178,7 @@ The notebook builds deterministic explanation text:
 
 The notebook uses phrases such as "ML model" and "anomaly detector." These are not allowed in the new UI. The backend can retain technical field names for artifact compatibility, but the frontend and narrative text must use business-friendly language:
 
-- Risk indicators
+- Rules Triggered
 - Investigation findings
 - Claim assessment
 - Review recommendation

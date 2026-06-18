@@ -91,7 +91,6 @@ Displays:
 - Findings.
 - Triggered Indicators.
 - Review Recommendations.
-- Detailed Claim Assessment.
 
 Results render below the claim table on the same page. After "Proceed" completes, the frontend scrolls to the newly rendered results region.
 
@@ -106,7 +105,7 @@ Visible language avoids:
 
 Preferred language:
 
-- Risk Indicators
+- Rules Triggered
 - Investigation Findings
 - Claim Assessment
 - Review Recommendation

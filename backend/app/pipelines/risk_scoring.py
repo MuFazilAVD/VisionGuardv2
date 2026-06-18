@@ -7,8 +7,8 @@ RISK_WEIGHTS = {
 }
 
 RISK_THRESHOLDS = {
-    "high": 0.75,
-    "medium": 0.50,
+    "high": 0.5,
+    "medium": 0.35,
 }
 
 logger = logging.getLogger(__name__)
