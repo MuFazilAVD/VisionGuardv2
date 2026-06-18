@@ -42,7 +42,7 @@ Backend:
 OPENAI_BASE_URL=https://d2brdeqy144bwg.cloudfront.net/myllm/v1
 OPENAI_API_KEY=<secret>
 OPENAI_MODEL=<model>
-APP_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+APP_CORS_ORIGINS=https://d2brdeqy144bwg.cloudfront.net,http://localhost:5173,http://127.0.0.1:5173
 ```
 
 Frontend:
@@ -113,6 +113,7 @@ npm run build
 
 - Serve the FastAPI app behind a production ASGI server.
 - Serve the frontend static build from a CDN or static host.
+- Keep the deployed frontend origin in `APP_CORS_ORIGINS`; the production CloudFront origin is always included by the backend.
 - Configure the frontend `VITE_API_BASE_URL` to the production backend base URL.
 - Store LLM credentials as secrets.
 - This POC does not include authentication, authorization, audit logging, or PHI-grade compliance controls.

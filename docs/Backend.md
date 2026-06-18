@@ -18,7 +18,7 @@ python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 | `OPENAI_BASE_URL` | `https://d2brdeqy144bwg.cloudfront.net/myllm/v1` | LLM API base URL. |
 | `OPENAI_API_KEY` | empty | LLM API key. |
 | `OPENAI_MODEL` | empty | LLM model name. |
-| `APP_CORS_ORIGINS` | local dev origins | Comma-separated CORS origins. |
+| `APP_CORS_ORIGINS` | local dev origins | Comma-separated CORS origins; the production CloudFront origin is always included. |
 
 ## Endpoints
 
