@@ -11,7 +11,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <ShieldCheckered size={22} weight="duotone" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-action">Vision Gaurd V2</p>
+              <p className="text-sm font-semibold text-action">Vision Guard</p>
               <h1 className="truncate text-lg font-semibold text-ink">Claims Risk Assessment</h1>
             </div>
           </div>
