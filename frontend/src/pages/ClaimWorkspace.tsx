@@ -159,7 +159,7 @@ function blankClaim(existingClaims: ClaimRecord[]): ClaimRecord {
     Age: randomInteger(...diagnosis.ageRange),
     ServiceDateFrom: nextServiceDate(existingClaims),
     PlaceOfService: randomChoice(placesOfService),
-    LineNumber: randomInteger(1, 4),
+    LineNumber: 1,
     ProcedureCode: procedure.code,
     ProcedureName: procedure.name,
     Modifier: randomModifier(procedure.category),
