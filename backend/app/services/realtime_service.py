@@ -69,7 +69,7 @@ class RealtimeService:
         similarity_matches = score_historical_similarity(scored_base, historical_ruled, anomaly_stats)
         logger.info("Historical similarity scoring completed for %d claim(s)", len(similarity_matches))
 
-        assessments = []
+        line_assessments = []
         for idx, row in scored_base.reset_index(drop=True).iterrows():
             rule_count = int(row.get("Rule_Flag_Count", 0) or 0)
             rule_count_normalized = min(rule_count / float(len(REALTIME_RULE_COLUMNS)), 1.0)
@@ -118,13 +118,11 @@ class RealtimeService:
                     "case_priority": similarity["historical_case_priority"],
                 },
             }
-            narrative = self.llm_service.generate_for_claim(context)
-            assessments.append(
+            line_assessments.append(
                 {
                     **context,
                     "rule_flag_count": rule_count,
                     "category": category,
-                    "narrative": narrative,
                     "details": {
                         "billed_allowed_ratio": round(float(row.get("BilledAllowedRatio", 0) or 0), 6),
                         "unexpected_pattern_driver": top_features[idx],
@@ -156,6 +154,10 @@ class RealtimeService:
                 final_pattern,
             )
 
+        assessments = self._aggregate_claim_assessments(line_assessments)
+        for assessment in assessments:
+            assessment["narrative"] = self.llm_service.generate_for_claim(assessment)
+
         batch_summary = self._build_batch_summary(assessments)
         batch_narrative = self.llm_service.generate_for_batch(
             {
@@ -177,6 +179,184 @@ class RealtimeService:
         }
         logger.info("Realtime analysis completed with %d assessment(s)", len(assessments))
         return result
+
+    def _aggregate_claim_assessments(
+        self,
+        line_assessments: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for assessment in line_assessments:
+            claim_id = str(assessment.get("claim_id", ""))
+            grouped.setdefault(claim_id, []).append(assessment)
+
+        assessments = [
+            self._aggregate_claim_lines(claim_id, claim_lines)
+            for claim_id, claim_lines in grouped.items()
+        ]
+        logger.info(
+            "Aggregated %d line assessment(s) into %d claim assessment(s)",
+            len(line_assessments),
+            len(assessments),
+        )
+        return assessments
+
+    def _aggregate_claim_lines(
+        self,
+        claim_id: str,
+        claim_lines: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        representative = max(
+            claim_lines,
+            key=lambda assessment: float(assessment.get("confidence_level") or 0.0),
+        )
+        line_numbers = sorted(
+            {
+                int(assessment.get("line_number", 1) or 1)
+                for assessment in claim_lines
+            }
+        )
+        anomaly_score = round(
+            sum(float(assessment.get("unexpected_pattern_score") or 0.0) for assessment in claim_lines)
+            / len(claim_lines),
+            6,
+        )
+        confidence_score = round(
+            max(float(assessment.get("confidence_level") or 0.0) for assessment in claim_lines),
+            6,
+        )
+        rule_count = sum(int(assessment.get("rule_flag_count") or 0) for assessment in claim_lines)
+        rule_count_normalized = min(rule_count / float(len(REALTIME_RULE_COLUMNS)), 1.0)
+        final_score = calculate_final_risk_score(
+            rule_count_normalized,
+            confidence_score,
+            anomaly_score,
+        )
+        risk_level = assign_risk_level(final_score)
+        indicators = self._accumulate_indicators(claim_lines)
+        category, top_reason = self._aggregate_category(claim_lines, indicators, representative)
+        action = recommended_action(risk_level, category)
+
+        raw_anomaly_score = round(
+            sum(
+                float(
+                    assessment.get("details", {}).get("raw_unexpected_pattern_score")
+                    or 0.0
+                )
+                for assessment in claim_lines
+            )
+            / len(claim_lines),
+            6,
+        )
+        line_score_details = [
+            {
+                "line_number": int(assessment.get("line_number", 1) or 1),
+                "final_risk_score": float(assessment.get("final_risk_score") or 0.0),
+                "ml_model_score": float(assessment.get("confidence_level") or 0.0),
+                "anomaly_score": float(assessment.get("unexpected_pattern_score") or 0.0),
+                "rule_flag_count": int(assessment.get("rule_flag_count") or 0),
+                "predicted_pattern": str(assessment.get("predicted_pattern") or ""),
+                "triggered_rule_ids": [
+                    str(indicator.get("rule_id") or "")
+                    for indicator in assessment.get("triggered_indicators", [])
+                ],
+            }
+            for assessment in claim_lines
+        ]
+
+        details = {
+            **representative.get("details", {}),
+            "raw_unexpected_pattern_score": raw_anomaly_score,
+            "representative_line_number": int(representative.get("line_number", 1) or 1),
+            "line_assessments": line_score_details,
+            "aggregation": {
+                "anomaly_score": "average",
+                "rule_flag_count": "sum",
+                "triggered_indicators": "accumulated_by_rule",
+                "ml_model_score": "maximum",
+            },
+        }
+        result = {
+            **representative,
+            "claim_id": claim_id,
+            "line_number": int(representative.get("line_number", 1) or 1),
+            "line_numbers": line_numbers,
+            "line_count": len(claim_lines),
+            "risk_level": risk_level,
+            "final_risk_score": final_score,
+            "confidence_level": confidence_score,
+            "unexpected_pattern_score": anomaly_score,
+            "rule_flag_count": rule_count,
+            "triggered_indicators": indicators,
+            "category": category,
+            "top_reason": top_reason,
+            "recommended_action": action,
+            "details": details,
+        }
+        result.pop("narrative", None)
+        logger.info(
+            "Claim lines aggregated: claim_id=%s lines=%s anomaly_average=%.6f "
+            "rules_accumulated=%d ml_score_max=%.6f",
+            claim_id,
+            line_numbers,
+            anomaly_score,
+            rule_count,
+            confidence_score,
+        )
+        return result
+
+    def _accumulate_indicators(
+        self,
+        claim_lines: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        accumulated: dict[str, dict[str, Any]] = {}
+        for assessment in claim_lines:
+            line_number = int(assessment.get("line_number", 1) or 1)
+            for indicator in assessment.get("triggered_indicators", []):
+                rule_id = str(indicator.get("rule_id") or "")
+                if rule_id not in accumulated:
+                    accumulated[rule_id] = {
+                        **indicator,
+                        "occurrence_count": 0,
+                        "line_numbers": [],
+                    }
+                current = accumulated[rule_id]
+                current["occurrence_count"] += 1
+                if line_number not in current["line_numbers"]:
+                    current["line_numbers"].append(line_number)
+
+        for indicator in accumulated.values():
+            indicator["line_numbers"].sort()
+        return list(accumulated.values())
+
+    def _aggregate_category(
+        self,
+        claim_lines: list[dict[str, Any]],
+        indicators: list[dict[str, Any]],
+        representative: dict[str, Any],
+    ) -> tuple[str, str]:
+        historical_matches = [
+            assessment
+            for assessment in claim_lines
+            if assessment.get("historical_match", {}).get("above_threshold")
+        ]
+        if historical_matches:
+            strongest_match = max(
+                historical_matches,
+                key=lambda assessment: float(
+                    assessment.get("historical_match", {}).get("similarity_score") or 0.0
+                ),
+            )
+            pattern = str(strongest_match.get("historical_match", {}).get("pattern") or "")
+            family = str(
+                strongest_match.get("historical_match", {}).get("pattern_family") or ""
+            )
+            return "Historical Fraud Pattern Match", f"Matches historical pattern: {pattern} ({family})"
+        if indicators:
+            return str(indicators[0]["category"]), str(indicators[0]["name"])
+        return (
+            str(representative.get("category") or "Billing Pattern"),
+            str(representative.get("top_reason") or "No dominant concern identified"),
+        )
 
     def _build_batch_summary(self, assessments: list[dict[str, Any]]) -> dict[str, Any]:
         total = len(assessments)

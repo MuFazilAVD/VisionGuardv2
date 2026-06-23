@@ -124,13 +124,14 @@ class LLMNarrativeService:
         risk_level = claim_data.get("risk_level", "Low")
         indicators = claim_data.get("triggered_indicators", [])
         indicator_names = [item.get("name", "Risk indicator") for item in indicators]
+        rule_count = int(claim_data.get("rule_flag_count") or len(indicator_names))
         top_reason = claim_data.get("top_reason") or "No dominant concern identified"
         action = claim_data.get("recommended_action") or "Retain for routine monitoring."
         score = float(claim_data.get("final_risk_score") or 0.0)
 
         if indicator_names:
             summary = (
-                f"This claim is rated {risk_level} risk with {len(indicator_names)} review "
+                f"This claim is rated {risk_level} risk with {rule_count} review "
                 f"indicator(s). The main concern is {top_reason.lower()}."
             )
         else:
@@ -194,6 +195,8 @@ class LLMNarrativeService:
             "claim": {
                 "claim_id": claim_data.get("claim_id"),
                 "line_number": claim_data.get("line_number"),
+                "line_numbers": claim_data.get("line_numbers"),
+                "line_count": claim_data.get("line_count"),
                 "procedure_code": claim_data.get("procedure_code"),
                 "procedure_name": claim_data.get("procedure_name"),
                 "provider_npi": claim_data.get("provider_npi"),

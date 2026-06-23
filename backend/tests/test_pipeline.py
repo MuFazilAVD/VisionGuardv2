@@ -1,6 +1,8 @@
 import pandas as pd
 
 from app.pipelines.similarity import score_historical_similarity
+from app.pipelines.risk_scoring import calculate_final_risk_score
+from app.pipelines.rules_engine import REALTIME_RULE_COLUMNS
 from app.services.realtime_service import RealtimeService
 from app.services.training_service import TrainingService
 
@@ -145,3 +147,118 @@ def test_similarity_uses_same_member_history_before_population_keys():
     assert result["similarity_above_threshold"] is True
     assert result["historical_claim_id"] == "HIST-SAME-MEMBER"
     assert result["historical_member_id"] == "MEM-1"
+
+
+def test_realtime_claim_lines_are_aggregated_after_individual_scoring():
+    service = object.__new__(RealtimeService)
+    line_assessments = [
+        {
+            "claim_id": "CLUB-1",
+            "member_id": "MEM-1",
+            "line_number": line_number,
+            "provider_npi": "111",
+            "procedure_code": f"CODE-{line_number}",
+            "procedure_name": f"Procedure {line_number}",
+            "risk_level": "Low",
+            "final_risk_score": 0.2 + (line_number / 100),
+            "confidence_level": confidence,
+            "unexpected_pattern_score": anomaly,
+            "rule_flag_count": rule_count,
+            "triggered_indicators": indicators,
+            "predicted_pattern": pattern,
+            "category": "Coding Review" if indicators else "Billing Pattern",
+            "top_reason": indicators[0]["name"] if indicators else "Unexpected amount",
+            "recommended_action": "Review.",
+            "historical_match": {
+                "similarity_score": 0.0,
+                "above_threshold": False,
+                "pattern": "",
+                "pattern_family": "",
+                "confidence": 0.0,
+                "case_priority": "",
+            },
+            "details": {
+                "raw_unexpected_pattern_score": raw_anomaly,
+            },
+        }
+        for line_number, confidence, anomaly, raw_anomaly, rule_count, indicators, pattern in [
+            (
+                1,
+                0.45,
+                0.10,
+                1.0,
+                1,
+                [{
+                    "rule_id": "R001",
+                    "name": "Rule one",
+                    "description": "First rule",
+                    "severity": "Medium",
+                    "category": "Coding Review",
+                }],
+                "Pattern A",
+            ),
+            (
+                2,
+                0.90,
+                0.20,
+                2.0,
+                2,
+                [
+                    {
+                        "rule_id": "R001",
+                        "name": "Rule one",
+                        "description": "First rule",
+                        "severity": "Medium",
+                        "category": "Coding Review",
+                    },
+                    {
+                        "rule_id": "R002",
+                        "name": "Rule two",
+                        "description": "Second rule",
+                        "severity": "High",
+                        "category": "Billing Review",
+                    },
+                ],
+                "Pattern B",
+            ),
+            (3, 0.60, 0.30, 3.0, 0, [], "Pattern C"),
+            (
+                4,
+                0.70,
+                0.40,
+                4.0,
+                1,
+                [{
+                    "rule_id": "R002",
+                    "name": "Rule two",
+                    "description": "Second rule",
+                    "severity": "High",
+                    "category": "Billing Review",
+                }],
+                "Pattern D",
+            ),
+        ]
+    ]
+
+    assessments = service._aggregate_claim_assessments(line_assessments)
+
+    assert len(assessments) == 1
+    assessment = assessments[0]
+    assert assessment["line_count"] == 4
+    assert assessment["line_numbers"] == [1, 2, 3, 4]
+    assert assessment["line_number"] == 2
+    assert assessment["unexpected_pattern_score"] == 0.25
+    assert assessment["details"]["raw_unexpected_pattern_score"] == 2.5
+    assert assessment["confidence_level"] == 0.9
+    assert assessment["predicted_pattern"] == "Pattern B"
+    assert assessment["rule_flag_count"] == 4
+    assert assessment["triggered_indicators"][0]["occurrence_count"] == 2
+    assert assessment["triggered_indicators"][0]["line_numbers"] == [1, 2]
+    assert assessment["triggered_indicators"][1]["occurrence_count"] == 2
+    assert assessment["triggered_indicators"][1]["line_numbers"] == [2, 4]
+    assert len(assessment["details"]["line_assessments"]) == 4
+    assert assessment["final_risk_score"] == calculate_final_risk_score(
+        4 / len(REALTIME_RULE_COLUMNS),
+        0.9,
+        0.25,
+    )

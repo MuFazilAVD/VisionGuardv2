@@ -64,6 +64,8 @@ export type TriggeredIndicator = {
   description: string;
   severity: "Low" | "Medium" | "High" | string;
   category: string;
+  occurrence_count: number;
+  line_numbers: number[];
 };
 
 export type ClaimNarrative = {
@@ -83,6 +85,8 @@ export type ClaimAssessment = {
   claim_id: string;
   member_id: string;
   line_number: number;
+  line_numbers: number[];
+  line_count: number;
   provider_npi: string;
   procedure_code: string;
   procedure_name: string;

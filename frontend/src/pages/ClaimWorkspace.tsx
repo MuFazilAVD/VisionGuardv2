@@ -285,6 +285,14 @@ function nextIdentifier(
   return `${preferredSequence.prefix}${String(nextValue).padStart(preferredSequence.width, "0")}`;
 }
 
+function uniqueClaimCount(claims: ClaimRecord[]) {
+  return new Set(
+    claims
+      .map((claim) => String(claim.ClaimId ?? "").trim())
+      .filter(Boolean)
+  ).size;
+}
+
 function nextServiceDate(existingClaims: ClaimRecord[]) {
   const parsedDates = existingClaims
     .map((claim) => parseClaimDate(String(claim.ServiceDateFrom ?? "").trim()))
@@ -379,6 +387,7 @@ export default function ClaimWorkspace({
   const seededRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
+  const claimCount = uniqueClaimCount(claims);
 
   useEffect(() => {
     if (!seededRef.current && sampleData?.realtime_claims.preview?.length) {
@@ -396,6 +405,14 @@ export default function ClaimWorkspace({
   const replaceClaims = (nextClaims: ClaimRecord[], label: string) => {
     setClaims(nextClaims);
     setSourceLabel(label);
+    resetAssessment();
+  };
+
+  const clearClaims = () => {
+    setClaims([]);
+    setSourceLabel("Manual entry");
+    setError(null);
+    setSyncError(null);
     resetAssessment();
   };
 
@@ -469,7 +486,7 @@ export default function ClaimWorkspace({
             <p className="mt-1 text-sm text-muted">
               {loading
                 ? "Loading test cases..."
-                : `${sourceLabel} - ${claims.length} claim${claims.length === 1 ? "" : "s"}`}
+                : `${sourceLabel} - ${claimCount} claim${claimCount === 1 ? "" : "s"}`}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -515,6 +532,14 @@ export default function ClaimWorkspace({
               onClick={() => replaceClaims([...claims, blankClaim(claims)], sourceLabel)}
             >
               Add Claim
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy || loading || !claims.length}
+              icon={<Trash size={17} weight="bold" />}
+              onClick={clearClaims}
+            >
+              Clear
             </Button>
             <Button
               disabled={busy || loading || !claims.length}
@@ -644,18 +669,22 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
 
       <div className="space-y-4">
         {analysis.assessments.map((assessment, index) => {
-          const cardKey = `${assessment.claim_id}-${assessment.line_number}-${index}`;
+          const cardKey = `${assessment.claim_id}-${index}`;
           const contentId = `assessment-details-${index}`;
           const isCollapsed = !expandedCards.has(cardKey);
+          const lineLabel = assessment.line_count === 1
+            ? `Line ${assessment.line_numbers[0]}`
+            : `Lines ${assessment.line_numbers.join(", ")}`;
 
           return (
             <Card key={cardKey} className={`border-t-4 ${riskBorder(assessment.risk_level)}`}>
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle>
-                    Claim {assessment.claim_id} - Line {assessment.line_number}
+                    Claim {assessment.claim_id} - {lineLabel}
                   </CardTitle>
                   <p className="mt-1 text-sm text-muted">
+                    {assessment.line_count > 1 ? `${assessment.line_count} claim lines · ` : ""}
                     {assessment.procedure_code} {assessment.procedure_name}
                   </p>
                 </div>
@@ -742,7 +771,15 @@ function AssessmentResults({ analysis }: { analysis: AnalyzeResponse }) {
                         {assessment.triggered_indicators.length ? (
                           assessment.triggered_indicators.map((indicator) => (
                             <TR key={indicator.rule_id}>
-                              <TD className="font-medium text-ink">{indicator.name}</TD>
+                              <TD className="font-medium text-ink">
+                                {indicator.name}
+                                {assessment.line_count > 1 ? (
+                                  <span className="mt-1 block text-xs font-normal text-muted">
+                                    Lines {indicator.line_numbers.join(", ")}
+                                    {indicator.occurrence_count > 1 ? ` · ${indicator.occurrence_count} hits` : ""}
+                                  </span>
+                                ) : null}
+                              </TD>
                               <TD>
                                 <RiskBadge level={indicator.severity} />
                               </TD>

@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TriggeredIndicator(BaseModel):
@@ -9,6 +9,8 @@ class TriggeredIndicator(BaseModel):
     description: str
     severity: str
     category: str
+    occurrence_count: int = 1
+    line_numbers: list[int] = Field(default_factory=list)
 
 
 class NarrativeMetadata(BaseModel):
@@ -30,6 +32,8 @@ class ClaimAssessment(BaseModel):
     claim_id: str
     member_id: str
     line_number: int
+    line_numbers: list[int]
+    line_count: int
     provider_npi: str
     procedure_code: str
     procedure_name: str
