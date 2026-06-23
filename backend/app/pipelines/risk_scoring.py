@@ -1,9 +1,9 @@
 import logging
 
 RISK_WEIGHTS = {
-    "rules": 0.6,
-    "pattern": 0.3,
-    "unexpected": 0.1,
+    "rules": 0.5,
+    "pattern": 0.49,
+    "unexpected": 0.01,
 }
 
 RISK_THRESHOLDS = {
