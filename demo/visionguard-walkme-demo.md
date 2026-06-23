@@ -68,7 +68,7 @@ The **Assessment Overview** summarizes the whole batch. Below it, each claim app
 Each expanded card shows:
 
 - **Risk Score** - the weighted score `S` computed by the engine. The UI displays `round(100 x S)%`.
-- **Confidence Level** - `round(100 x P)%`, where `P` is the highest class probability returned by the pattern model. It is confidence in the model's predicted review pattern, not the probability that fraud occurred.
+- **Confidence Level** - `round(100 x P)%`. It starts with the highest pattern-model class probability and receives the historical ClaimId boost when applicable. It is a scoring signal, not the probability that fraud occurred.
 - **Rules Triggered** - the raw count `C = sum(I_j)` of realtime rule flags, where each `I_j` is `1` when rule `j` triggers and `0` otherwise.
 - **Review Pattern** - the pattern selected by the trained classifier, unless a historical similarity score of at least `0.85` replaces the displayed label.
 - **Executive Summary** - concise business interpretation.
@@ -82,12 +82,16 @@ C = number of triggered realtime rules
 C* = min(max(C, 0), 9)                    capped rule count
 R = C* / 9                                when C* <= 1
 R = 1/9 + (8/9)((C* - 1)/8)^0.75          when C* > 1
-P = max(pattern class probabilities)      pattern-confidence signal
+P_raw = max(pattern class probabilities)  raw pattern-confidence signal
+M = 1 when ClaimId exists in history      exact historical-claim signal
+P = P_raw + 0.70(1 - P_raw)               when M = 1; otherwise P = P_raw
 U = normalized numeric anomaly distance   unexpectedness signal
 
 B = 0.60R + 0.30P + 0.10U                 base risk score
 S = smooth_escalation(B)                   final risk score
 ```
+
+The exact ClaimId boost uses 70% of the remaining confidence headroom. For example, a raw pattern confidence of `0.40` becomes `0.40 + 0.70(0.60) = 0.82`. Blank ClaimIds never match. Matching is trimmed and case-insensitive. This boost changes confidence and final risk, but it does not replace the predicted pattern.
 
 Using the current seeded artifacts, RT002 approximately triggers two rules with `P = 0.679671` and `U = 0.729820`:
 
@@ -153,12 +157,14 @@ The classifier is a 100-tree random forest with maximum tree depth `8`. It is tr
 Unknown categorical values are ignored rather than causing scoring to fail. For class `k`, the forest averages the class probabilities from all trees:
 
 ```text
-p_k(x) = (1 / 100) x sum from t=1 to 100 of p_t,k(x)
-k*     = argmax over k of p_k(x)
-P(x)   = max over k of p_k(x)
+p_k(x)  = (1 / 100) x sum from t=1 to 100 of p_t,k(x)
+k*      = argmax over k of p_k(x)
+P_raw(x)= max over k of p_k(x)
+P(x)    = P_raw(x) + 0.70(1 - P_raw(x)) when ClaimId exists in history
+P(x)    = P_raw(x) otherwise
 ```
 
-`k*` is the model's review-pattern label and `P` is the **Confidence Level**. This confidence is not calibrated as fraud probability.
+`k*` is the model's review-pattern label. `P_raw` is the model's original class confidence, while `P` is the **Confidence Level** used in scoring after any exact historical ClaimId boost. Neither is calibrated as fraud probability.
 
 ### 5.4 Compute numeric unexpectedness
 
@@ -185,7 +191,7 @@ similarity(x, h) = (z_x dot z_h) / (||z_x|| x ||z_h||)
 best_similarity  = max over candidate historical claims h
 ```
 
-A best score of at least `0.85` replaces the displayed review-pattern label and drives the historical-match category and reason. A non-exam claim is prevented from matching the **Two Exams in One Day** pattern. Similarity does not enter the final risk formula, and the displayed Confidence Level remains the classifier confidence even when similarity replaces the pattern label.
+A best score of at least `0.85` replaces the displayed review-pattern label and drives the historical-match category and reason. A non-exam claim is prevented from matching the **Two Exams in One Day** pattern. Similarity does not directly enter the final risk formula. The separate exact ClaimId match can boost confidence whether or not cosine similarity reaches `0.85`.
 
 ### 5.6 Combine the risk signals
 
@@ -213,7 +219,7 @@ The rule curve preserves `1 rule = 1/9`, accelerates the penalty for additional 
 9+ rules = 1.000000
 ```
 
-Rules provide 60% of the base score, pattern confidence provides 30%, and numeric unexpectedness provides 10%. Moderate escalation begins above 40%, with stronger escalation above 55%.
+Rules provide 60% of the base score, pattern confidence provides 30%, and numeric unexpectedness provides 10%. An exact historical ClaimId match boosts pattern confidence by 70% of its remaining headroom before these weights are applied. Moderate escalation begins above 40%, with stronger escalation above 55%.
 
 ### 5.7 Generate the explanation
 
@@ -223,7 +229,7 @@ The selected risk level, pattern, indicators, historical match, top reason, and 
 
 - The overview labels **Frauds**, **Suspicious**, and **Clean** currently map directly to High-, Medium-, and Low-risk counts. They are triage labels, not confirmed fraud findings or final claim dispositions.
 - A Low-risk claim can still contain a High-severity rule indicator because overall risk combines several signals.
-- Confidence describes pattern classification confidence; it is not fraud probability.
+- Confidence is the pattern classification signal after any exact historical ClaimId boost; it is not fraud probability.
 - Narrative text explains the result but does not determine the score.
 
 ## Close

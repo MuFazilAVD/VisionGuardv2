@@ -10,8 +10,10 @@ import pandas as pd
 from app.pipelines.anomaly import score_anomalies
 from app.pipelines.features import add_billed_allowed_ratio, prepare_feature_frame
 from app.pipelines.risk_scoring import (
+    HISTORICAL_CLAIM_MATCH_BOOST_FRACTION,
     MAX_RULE_COUNT,
     assign_risk_level,
+    boost_pattern_confidence,
     calculate_final_risk_score,
     normalize_rule_count,
     recommended_action,
@@ -57,6 +59,11 @@ class RealtimeService:
         logger.info("Incoming claims frame created with shape=%s", incoming.shape)
         historical = self.data_repository.load_historical_claims()
         logger.info("Loaded historical context with %d row(s)", len(historical))
+        historical_claim_ids = self._historical_claim_ids(historical)
+        logger.info(
+            "Prepared %d unique historical ClaimId value(s) for exact matching",
+            len(historical_claim_ids),
+        )
         ruled = apply_rules(incoming, mode="realtime", context_df=historical)
         logger.info("Realtime rules applied; total triggered flags=%d", int(ruled["Rule_Flag_Count"].sum()))
         scored_base = add_billed_allowed_ratio(ruled)
@@ -79,7 +86,13 @@ class RealtimeService:
         for idx, row in scored_base.reset_index(drop=True).iterrows():
             rule_count = int(row.get("Rule_Flag_Count", 0) or 0)
             rule_count_normalized = normalize_rule_count(rule_count)
-            confidence = float(confidence_scores[idx])
+            raw_confidence = float(confidence_scores[idx])
+            claim_id = str(row.get("ClaimId", "")).strip()
+            confidence, historical_claim_id_match = self._confidence_with_historical_claim_match(
+                raw_confidence,
+                claim_id,
+                historical_claim_ids,
+            )
             unexpected = float(anomaly_normalized[idx])
             final_score = calculate_final_risk_score(rule_count_normalized, confidence, unexpected)
             risk_level = assign_risk_level(final_score)
@@ -95,7 +108,7 @@ class RealtimeService:
             )
 
             context = {
-                "claim_id": str(row.get("ClaimId", "")),
+                "claim_id": claim_id,
                 "member_id": str(row.get("MemberId", "")),
                 "line_number": int(row.get("LineNumber", 1) or 1),
                 "provider_npi": str(row.get("ProviderNPI", "")),
@@ -116,6 +129,7 @@ class RealtimeService:
                 "recommended_action": action,
                 "triggered_indicators": self._public_indicators(indicators),
                 "historical_match": {
+                    "claim_id_match": historical_claim_id_match,
                     "similarity_score": similarity["similarity_score"],
                     "above_threshold": similarity["similarity_above_threshold"],
                     "pattern": similarity["historical_pattern"],
@@ -135,6 +149,18 @@ class RealtimeService:
                         "raw_unexpected_pattern_score": round(float(anomaly_scores[idx]), 6),
                         "rule_count_normalization_denominator": MAX_RULE_COUNT,
                         "rule_count_normalized": round(rule_count_normalized, 6),
+                        "ml_model_score_raw": round(raw_confidence, 6),
+                        "ml_model_score_boosted": round(confidence, 6),
+                        "historical_claim_id_match": historical_claim_id_match,
+                        "historical_claim_id_boost_fraction": (
+                            HISTORICAL_CLAIM_MATCH_BOOST_FRACTION
+                            if historical_claim_id_match
+                            else 0.0
+                        ),
+                        "historical_claim_id_confidence_boost": round(
+                            confidence - raw_confidence,
+                            6,
+                        ),
                         "similarity_score": similarity["similarity_score"],
                         "similarity_above_threshold": similarity["similarity_above_threshold"],
                         "historical_pattern": similarity["historical_pattern"],
@@ -152,13 +178,18 @@ class RealtimeService:
                 }
             )
             logger.info(
-                "Realtime assessment built: claim_id=%s line=%s risk=%s score=%.6f rules=%d pattern=%s",
+                "Realtime assessment built: claim_id=%s line=%s risk=%s score=%.6f "
+                "rules=%d pattern=%s historical_claim_id_match=%s raw_confidence=%.6f "
+                "boosted_confidence=%.6f",
                 context["claim_id"],
                 context["line_number"],
                 risk_level,
                 final_score,
                 rule_count,
                 final_pattern,
+                historical_claim_id_match,
+                raw_confidence,
+                confidence,
             )
 
         assessments = self._aggregate_claim_assessments(line_assessments)
@@ -206,6 +237,42 @@ class RealtimeService:
             len(assessments),
         )
         return assessments
+
+    @staticmethod
+    def _normalize_claim_id(value: Any) -> str:
+        if value is None:
+            return ""
+        try:
+            if pd.isna(value):
+                return ""
+        except (TypeError, ValueError):
+            pass
+        return str(value).strip().upper()
+
+    def _historical_claim_ids(self, historical: pd.DataFrame) -> set[str]:
+        if "ClaimId" not in historical.columns:
+            return set()
+        return {
+            normalized
+            for normalized in (
+                self._normalize_claim_id(value)
+                for value in historical["ClaimId"].tolist()
+            )
+            if normalized
+        }
+
+    def _confidence_with_historical_claim_match(
+        self,
+        raw_confidence: float,
+        claim_id: Any,
+        historical_claim_ids: set[str],
+    ) -> tuple[float, bool]:
+        matched = self._normalize_claim_id(claim_id) in historical_claim_ids
+        boosted = boost_pattern_confidence(
+            raw_confidence,
+            historical_claim_id_match=matched,
+        )
+        return boosted, matched
 
     def _aggregate_claim_lines(
         self,
@@ -259,6 +326,14 @@ class RealtimeService:
                 "line_number": int(assessment.get("line_number", 1) or 1),
                 "final_risk_score": float(assessment.get("final_risk_score") or 0.0),
                 "ml_model_score": float(assessment.get("confidence_level") or 0.0),
+                "ml_model_score_raw": float(
+                    assessment.get("details", {}).get("ml_model_score_raw")
+                    or assessment.get("confidence_level")
+                    or 0.0
+                ),
+                "historical_claim_id_match": bool(
+                    assessment.get("details", {}).get("historical_claim_id_match")
+                ),
                 "anomaly_score": float(assessment.get("unexpected_pattern_score") or 0.0),
                 "rule_flag_count": int(assessment.get("rule_flag_count") or 0),
                 "predicted_pattern": str(assessment.get("predicted_pattern") or ""),
@@ -280,7 +355,7 @@ class RealtimeService:
                 "anomaly_score": "average",
                 "rule_flag_count": "sum",
                 "triggered_indicators": "accumulated_by_rule",
-                "ml_model_score": "maximum",
+                "ml_model_score": "maximum after historical ClaimId boost",
             },
         }
         result = {

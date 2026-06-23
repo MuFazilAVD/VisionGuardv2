@@ -1,8 +1,10 @@
 import pandas as pd
+import pytest
 
 from app.pipelines.similarity import score_historical_similarity
 from app.pipelines.risk_scoring import (
     assign_risk_level,
+    boost_pattern_confidence,
     calculate_final_risk_score,
     escalate_risk_score,
     normalize_rule_count,
@@ -298,3 +300,53 @@ def test_risk_levels_use_forty_and_fifty_five_percent_thresholds():
     assert assign_risk_level(0.40) == "Medium"
     assert assign_risk_level(0.549999) == "Medium"
     assert assign_risk_level(0.55) == "High"
+
+
+def test_historical_claim_id_match_boosts_seventy_percent_of_remaining_confidence():
+    assert boost_pattern_confidence(
+        0.40,
+        historical_claim_id_match=True,
+    ) == pytest.approx(0.82)
+    assert boost_pattern_confidence(
+        0.40,
+        historical_claim_id_match=False,
+    ) == 0.40
+    assert boost_pattern_confidence(
+        1.00,
+        historical_claim_id_match=True,
+    ) == 1.00
+    assert boost_pattern_confidence(
+        1.50,
+        historical_claim_id_match=True,
+    ) == 1.00
+
+
+def test_historical_claim_id_matching_is_trimmed_case_insensitive_and_blank_safe():
+    service = object.__new__(RealtimeService)
+    historical = pd.DataFrame(
+        {
+            "ClaimId": ["  claim-001 ", "CLAIM-002", "", None],
+        }
+    )
+
+    claim_ids = service._historical_claim_ids(historical)
+
+    assert claim_ids == {"CLAIM-001", "CLAIM-002"}
+    assert service._normalize_claim_id(" claim-001 ") in claim_ids
+    assert service._normalize_claim_id("") not in claim_ids
+
+    boosted, matched = service._confidence_with_historical_claim_match(
+        0.40,
+        " claim-001 ",
+        claim_ids,
+    )
+    unchanged, unmatched = service._confidence_with_historical_claim_match(
+        0.40,
+        "claim-999",
+        claim_ids,
+    )
+
+    assert matched is True
+    assert boosted == pytest.approx(0.82)
+    assert unmatched is False
+    assert unchanged == 0.40

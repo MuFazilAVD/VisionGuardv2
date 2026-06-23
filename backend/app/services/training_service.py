@@ -13,6 +13,7 @@ from sklearn.preprocessing import LabelEncoder
 from app.pipelines.anomaly import compute_anomaly_stats
 from app.pipelines.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES, build_feature_pipeline, prepare_feature_frame
 from app.pipelines.risk_scoring import (
+    HISTORICAL_CLAIM_MATCH_BOOST_FRACTION,
     MAX_RULE_COUNT,
     RISK_ESCALATION,
     RISK_THRESHOLDS,
@@ -153,6 +154,10 @@ class TrainingService:
                 "acceleration_exponent": RULE_ACCELERATION_EXPONENT,
             },
             "risk_escalation": RISK_ESCALATION,
+            "historical_claim_id_confidence_boost": {
+                "remaining_headroom_fraction": HISTORICAL_CLAIM_MATCH_BOOST_FRACTION,
+                "formula": "P_boosted = P_raw + fraction * (1 - P_raw)",
+            },
             "historical_dataset": historical_fingerprint,
         }
 

@@ -13,6 +13,7 @@ RISK_THRESHOLDS = {
 
 MAX_RULE_COUNT = 9
 RULE_ACCELERATION_EXPONENT = 0.75
+HISTORICAL_CLAIM_MATCH_BOOST_FRACTION = 0.70
 
 RISK_ESCALATION = {
     "moderate_start": 0.40,
@@ -77,6 +78,19 @@ def escalate_risk_score(base_score: float) -> float:
         )
     )
     return _clamp_unit(base + moderate_penalty + severe_penalty)
+
+
+def boost_pattern_confidence(
+    confidence: float,
+    *,
+    historical_claim_id_match: bool,
+) -> float:
+    """Boost confidence by 70% of its remaining headroom for an exact ClaimId match."""
+    base = _clamp_unit(confidence)
+    if not historical_claim_id_match:
+        return base
+    boosted = base + HISTORICAL_CLAIM_MATCH_BOOST_FRACTION * (1.0 - base)
+    return _clamp_unit(boosted)
 
 
 def calculate_final_risk_score(
