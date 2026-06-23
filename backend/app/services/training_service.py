@@ -12,7 +12,13 @@ from sklearn.preprocessing import LabelEncoder
 
 from app.pipelines.anomaly import compute_anomaly_stats
 from app.pipelines.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES, build_feature_pipeline, prepare_feature_frame
-from app.pipelines.risk_scoring import RISK_THRESHOLDS, RISK_WEIGHTS
+from app.pipelines.risk_scoring import (
+    MAX_RULE_COUNT,
+    RISK_ESCALATION,
+    RISK_THRESHOLDS,
+    RISK_WEIGHTS,
+    RULE_ACCELERATION_EXPONENT,
+)
 from app.pipelines.rules_engine import HISTORICAL_RULE_COLUMNS, REALTIME_RULE_COLUMNS, RULE_DEFINITIONS, apply_rules
 from app.repositories.artifact_repository import ArtifactRepository
 from app.repositories.data_repository import DataRepository
@@ -142,6 +148,11 @@ class TrainingService:
             ],
             "risk_weights": RISK_WEIGHTS,
             "risk_thresholds": RISK_THRESHOLDS,
+            "rule_scoring": {
+                "maximum_rule_count": MAX_RULE_COUNT,
+                "acceleration_exponent": RULE_ACCELERATION_EXPONENT,
+            },
+            "risk_escalation": RISK_ESCALATION,
             "historical_dataset": historical_fingerprint,
         }
 

@@ -9,8 +9,14 @@ import pandas as pd
 
 from app.pipelines.anomaly import score_anomalies
 from app.pipelines.features import add_billed_allowed_ratio, prepare_feature_frame
-from app.pipelines.risk_scoring import assign_risk_level, calculate_final_risk_score, recommended_action
-from app.pipelines.rules_engine import REALTIME_RULE_COLUMNS, apply_rules, triggered_indicators
+from app.pipelines.risk_scoring import (
+    MAX_RULE_COUNT,
+    assign_risk_level,
+    calculate_final_risk_score,
+    normalize_rule_count,
+    recommended_action,
+)
+from app.pipelines.rules_engine import apply_rules, triggered_indicators
 from app.pipelines.similarity import score_historical_similarity
 from app.repositories.artifact_repository import ArtifactRepository
 from app.repositories.data_repository import DataRepository
@@ -72,7 +78,7 @@ class RealtimeService:
         line_assessments = []
         for idx, row in scored_base.reset_index(drop=True).iterrows():
             rule_count = int(row.get("Rule_Flag_Count", 0) or 0)
-            rule_count_normalized = min(rule_count / float(len(REALTIME_RULE_COLUMNS)), 1.0)
+            rule_count_normalized = normalize_rule_count(rule_count)
             confidence = float(confidence_scores[idx])
             unexpected = float(anomaly_normalized[idx])
             final_score = calculate_final_risk_score(rule_count_normalized, confidence, unexpected)
@@ -127,7 +133,8 @@ class RealtimeService:
                         "billed_allowed_ratio": round(float(row.get("BilledAllowedRatio", 0) or 0), 6),
                         "unexpected_pattern_driver": top_features[idx],
                         "raw_unexpected_pattern_score": round(float(anomaly_scores[idx]), 6),
-                        "rule_count_normalization_denominator": len(REALTIME_RULE_COLUMNS),
+                        "rule_count_normalization_denominator": MAX_RULE_COUNT,
+                        "rule_count_normalized": round(rule_count_normalized, 6),
                         "similarity_score": similarity["similarity_score"],
                         "similarity_above_threshold": similarity["similarity_above_threshold"],
                         "historical_pattern": similarity["historical_pattern"],
@@ -225,7 +232,7 @@ class RealtimeService:
             6,
         )
         rule_count = sum(int(assessment.get("rule_flag_count") or 0) for assessment in claim_lines)
-        rule_count_normalized = min(rule_count / float(len(REALTIME_RULE_COLUMNS)), 1.0)
+        rule_count_normalized = normalize_rule_count(rule_count)
         final_score = calculate_final_risk_score(
             rule_count_normalized,
             confidence_score,
@@ -266,6 +273,7 @@ class RealtimeService:
         details = {
             **representative.get("details", {}),
             "raw_unexpected_pattern_score": raw_anomaly_score,
+            "rule_count_normalized": round(rule_count_normalized, 6),
             "representative_line_number": int(representative.get("line_number", 1) or 1),
             "line_assessments": line_score_details,
             "aggregation": {

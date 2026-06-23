@@ -79,29 +79,35 @@ The displayed values can be read mathematically as:
 
 ```text
 C = number of triggered realtime rules
-R = min(C / 9, 1)                         normalized rule signal
+C* = min(max(C, 0), 9)                    capped rule count
+R = C* / 9                                when C* <= 1
+R = 1/9 + (8/9)((C* - 1)/8)^0.75          when C* > 1
 P = max(pattern class probabilities)      pattern-confidence signal
 U = normalized numeric anomaly distance   unexpectedness signal
 
-S = 0.40R + 0.30P + 0.30U                 final risk score
+B = 0.60R + 0.30P + 0.10U                 base risk score
+S = smooth_escalation(B)                   final risk score
 ```
 
 Using the current seeded artifacts, RT002 approximately triggers two rules with `P = 0.679671` and `U = 0.729820`:
 
 ```text
-R = 2 / 9 = 0.222222
-S = 0.40(0.222222) + 0.30(0.679671) + 0.30(0.729820)
-  = 0.511736
+R = 1/9 + (8/9)(1/8)^0.75
+  = 0.297977
+B = 0.60(0.297977) + 0.30(0.679671) + 0.10(0.729820)
+  = 0.455669
+S = smooth_escalation(B)
+  = 0.475982
 ```
 
-The card displays **51%**, and the claim is **Medium** risk because `0.50 <= S < 0.75`. Scores are stored to six decimal places before the frontend converts them to percentages. The learned values can change after **Sync Engine** retrains the artifacts.
+The card displays **48%**, and the claim is **Medium** risk because `0.40 <= S < 0.55`. Scores are stored to six decimal places before the frontend converts them to percentages. The learned values can change after **Sync Engine** retrains the artifacts.
 
 The **Assessment Overview** is computed directly from claim-level results:
 
 ```text
-Frauds     = count(S >= 0.75)
-Suspicious = count(0.50 <= S < 0.75)
-Clean      = count(S < 0.50)
+Frauds     = count(S >= 0.55)
+Suspicious = count(0.40 <= S < 0.55)
+Clean      = count(S < 0.40)
 Avg Risk   = round(100 x (sum(S_i) / n))%
 ```
 
@@ -183,17 +189,31 @@ A best score of at least `0.85` replaces the displayed review-pattern label and 
 
 ### 5.6 Combine the risk signals
 
-The engine combines the three numeric signals and rounds the result to six decimal places:
+The engine first combines the three numeric signals:
 
 ```text
-S(x) = round(0.40R(x) + 0.30P(x) + 0.30U(x), 6)
-
-Low    when S < 0.50
-Medium when 0.50 <= S < 0.75
-High   when S >= 0.75
+B(x) = 0.60R(x) + 0.30P(x) + 0.10U(x)
 ```
 
-Rules therefore provide 40% of the possible score, while pattern confidence and numeric unexpectedness provide 30% each. The thresholds are inclusive at `0.50` for Medium and `0.75` for High.
+It then applies two bounded smoothstep escalation bands. The first gradually adds up to 12% of the remaining headroom as the base score moves from `0.40` to `0.55`. The second adds up to another 28% of remaining headroom as the base score moves from `0.55` to `0.75`. The final score is capped at `1.00` and rounded to six decimal places.
+
+```text
+Low    when S < 0.40
+Medium when 0.40 <= S < 0.55
+High   when S >= 0.55
+```
+
+The rule curve preserves `1 rule = 1/9`, accelerates the penalty for additional rules, and caps counts at nine:
+
+```text
+1 rule = 0.111111
+2 rules = 0.297977
+3 rules = 0.425381
+4 rules = 0.537073
+9+ rules = 1.000000
+```
+
+Rules provide 60% of the base score, pattern confidence provides 30%, and numeric unexpectedness provides 10%. Moderate escalation begins above 40%, with stronger escalation above 55%.
 
 ### 5.7 Generate the explanation
 

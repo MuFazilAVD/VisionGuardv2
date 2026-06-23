@@ -1,8 +1,12 @@
 import pandas as pd
 
 from app.pipelines.similarity import score_historical_similarity
-from app.pipelines.risk_scoring import calculate_final_risk_score
-from app.pipelines.rules_engine import REALTIME_RULE_COLUMNS
+from app.pipelines.risk_scoring import (
+    assign_risk_level,
+    calculate_final_risk_score,
+    escalate_risk_score,
+    normalize_rule_count,
+)
 from app.services.realtime_service import RealtimeService
 from app.services.training_service import TrainingService
 
@@ -258,7 +262,39 @@ def test_realtime_claim_lines_are_aggregated_after_individual_scoring():
     assert assessment["triggered_indicators"][1]["line_numbers"] == [2, 4]
     assert len(assessment["details"]["line_assessments"]) == 4
     assert assessment["final_risk_score"] == calculate_final_risk_score(
-        4 / len(REALTIME_RULE_COLUMNS),
+        normalize_rule_count(4),
         0.9,
         0.25,
     )
+
+
+def test_rule_count_curve_accelerates_after_first_rule_and_caps_at_nine():
+    scores = [normalize_rule_count(count) for count in range(11)]
+
+    assert scores[0] == 0.0
+    assert scores[1] == 1 / 9
+    assert scores[2] > 2 / 9
+    assert scores[3] > 3 / 9
+    assert scores[9] == 1.0
+    assert scores[10] == 1.0
+    assert scores == sorted(scores)
+
+
+def test_risk_escalation_is_smooth_progressive_and_bounded():
+    assert escalate_risk_score(0.40) == 0.40
+    assert escalate_risk_score(0.45) > 0.45
+    assert escalate_risk_score(0.55) > escalate_risk_score(0.50)
+    assert escalate_risk_score(0.60) - 0.60 > escalate_risk_score(0.45) - 0.45
+    assert escalate_risk_score(1.00) == 1.00
+    assert escalate_risk_score(1.50) == 1.00
+
+    samples = [escalate_risk_score(index / 100) for index in range(101)]
+    assert samples == sorted(samples)
+    assert all(0.0 <= score <= 1.0 for score in samples)
+
+
+def test_risk_levels_use_forty_and_fifty_five_percent_thresholds():
+    assert assign_risk_level(0.399999) == "Low"
+    assert assign_risk_level(0.40) == "Medium"
+    assert assign_risk_level(0.549999) == "Medium"
+    assert assign_risk_level(0.55) == "High"
